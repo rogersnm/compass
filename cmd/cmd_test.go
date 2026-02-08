@@ -7,6 +7,7 @@ import (
 
 	"github.com/rogersnm/compass/internal/config"
 	"github.com/rogersnm/compass/internal/model"
+	"github.com/rogersnm/compass/internal/repofile"
 	"github.com/rogersnm/compass/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -363,6 +364,104 @@ func TestDocCheckin(t *testing.T) {
 	got, _, err := s.GetDocument(doc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "My Doc", got.Title)
+}
+
+func TestRepoInit_Success(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "repo", "init", p.ID))
+
+	got, err := repofile.Read(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, got)
+}
+
+func TestRepoInit_InvalidProject(t *testing.T) {
+	setupEnv(t)
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	assert.Error(t, run(t, "repo", "init", "ZZZZ"))
+}
+
+func TestRepoShow_NoLink(t *testing.T) {
+	setupEnv(t)
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "repo", "show"))
+}
+
+func TestRepoUnlink_Success(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, repofile.Write(tmpDir, p.ID))
+	require.NoError(t, run(t, "repo", "unlink"))
+
+	got, err := repofile.Read(tmpDir)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestResolveProject_RepoFileOverridesDefault(t *testing.T) {
+	s, _ := setupEnv(t)
+	p1, _ := s.CreateProject("Default Project", "DP", "")
+	p2, _ := s.CreateProject("Repo Project", "RP", "")
+	cfg = &config.Config{DefaultProject: p1.ID}
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, repofile.Write(tmpDir, p2.ID))
+
+	// Task create without --project should use repo file (p2), not global default (p1)
+	require.NoError(t, run(t, "task", "create", "Repo Task", "--project", "", "--type", "task", "--priority", "-1", "--depends-on", "", "--epic", ""))
+
+	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p2.ID})
+	require.NoError(t, err)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "Repo Task", tasks[0].Title)
+}
+
+func TestResolveProject_FlagOverridesRepoFile(t *testing.T) {
+	s, _ := setupEnv(t)
+	p1, _ := s.CreateProject("Flag Project", "FP", "")
+	p2, _ := s.CreateProject("Repo Project", "RP", "")
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, repofile.Write(tmpDir, p2.ID))
+
+	// Explicit --project flag should win over repo file
+	require.NoError(t, run(t, "task", "create", "Flag Task", "--project", p1.ID, "--type", "task", "--priority", "-1", "--depends-on", ""))
+
+	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p1.ID})
+	require.NoError(t, err)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "Flag Task", tasks[0].Title)
 }
 
 func TestE2EWorkflow(t *testing.T) {

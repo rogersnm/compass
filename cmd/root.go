@@ -7,6 +7,7 @@ import (
 
 	mtp "github.com/modeltoolsprotocol/go-sdk"
 	"github.com/rogersnm/compass/internal/config"
+	"github.com/rogersnm/compass/internal/repofile"
 	"github.com/rogersnm/compass/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -180,6 +181,22 @@ func init() {
 					{Description: "Search across all entities", Command: "compass search \"authentication\""},
 				},
 			},
+			"repo init": {
+				Examples: []mtp.Example{
+					{Description: "Link current directory to a project", Command: "compass repo init AUTH"},
+				},
+			},
+			"repo show": {
+				Stdout: &mtp.IODescriptor{
+					ContentType: "text/plain",
+					Description: "Project ID and path of the repo-local .compass-project file",
+				},
+			},
+			"repo unlink": {
+				Examples: []mtp.Example{
+					{Description: "Remove repo-local project link", Command: "compass repo unlink"},
+				},
+			},
 		},
 	}
 
@@ -190,14 +207,19 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-// resolveProject returns the project ID from the flag or the default config.
+// resolveProject returns the project ID from the flag, repo-local file, or global default.
 func resolveProject(cmd *cobra.Command) (string, error) {
 	p, _ := cmd.Flags().GetString("project")
 	if p != "" {
 		return p, nil
 	}
+	if cwd, err := os.Getwd(); err == nil {
+		if rp, _, _ := repofile.Find(cwd); rp != "" {
+			return rp, nil
+		}
+	}
 	if cfg != nil && cfg.DefaultProject != "" {
 		return cfg.DefaultProject, nil
 	}
-	return "", fmt.Errorf("--project is required (or set a default with: compass project set-default <id>)")
+	return "", fmt.Errorf("--project is required (or set a default with: compass project set-default <id>, or link a repo with: compass repo init)")
 }
