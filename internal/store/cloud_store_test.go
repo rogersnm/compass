@@ -291,21 +291,108 @@ func TestCloudStore_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "Project not found")
 }
 
-func TestCloudStore_UnsupportedOperations(t *testing.T) {
+func TestCloudStore_CheckoutTask(t *testing.T) {
+	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/tasks/MP-TABCDE", r.URL.Path)
+		jsonResponse(w, 200, map[string]any{
+			"data": map[string]any{
+				"task_id":    "uuid-task",
+				"display_id": "MP-TABCDE",
+				"title":      "My Task",
+				"type":       "task",
+				"status":     "open",
+				"body":       "task body content",
+				"created_at": "2026-01-01T00:00:00Z",
+			},
+		})
+	})
+	defer srv.Close()
+
+	destDir := t.TempDir()
+	localPath, err := cs.CheckoutEntity("MP-TABCDE", destDir)
+	require.NoError(t, err)
+	assert.FileExists(t, localPath)
+	assert.Contains(t, localPath, "MP-TABCDE.md")
+
+	// Verify file is parseable
+	task, body, err := ReadEntity[model.Task](localPath)
+	require.NoError(t, err)
+	assert.Equal(t, "MP-TABCDE", task.ID)
+	assert.Equal(t, "My Task", task.Title)
+	assert.Equal(t, "task body content", body)
+}
+
+func TestCloudStore_CheckoutDocument(t *testing.T) {
+	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/documents/MP-DABCDE", r.URL.Path)
+		jsonResponse(w, 200, map[string]any{
+			"data": map[string]any{
+				"document_id": "uuid-doc",
+				"display_id":  "MP-DABCDE",
+				"title":       "My Doc",
+				"body":        "doc body",
+				"created_at":  "2026-01-01T00:00:00Z",
+			},
+		})
+	})
+	defer srv.Close()
+
+	destDir := t.TempDir()
+	localPath, err := cs.CheckoutEntity("MP-DABCDE", destDir)
+	require.NoError(t, err)
+	assert.FileExists(t, localPath)
+
+	doc, body, err := ReadEntity[model.Document](localPath)
+	require.NoError(t, err)
+	assert.Equal(t, "MP-DABCDE", doc.ID)
+	assert.Equal(t, "doc body", body)
+}
+
+func TestCloudStore_CheckinTask(t *testing.T) {
+	var patchBody map[string]any
+	callCount := 0
+	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.Method == "PATCH" {
+			json.NewDecoder(r.Body).Decode(&patchBody)
+			jsonResponse(w, 200, map[string]any{
+				"data": map[string]any{
+					"task_id":    "uuid-task",
+					"display_id": "MP-TABCDE",
+					"title":      "Updated Title",
+					"type":       "task",
+					"status":     "open",
+					"body":       "updated body",
+					"created_at": "2026-01-01T00:00:00Z",
+				},
+			})
+		}
+	})
+	defer srv.Close()
+
+	// Write a local task file
+	destDir := t.TempDir()
+	task := &model.Task{
+		ID:     "MP-TABCDE",
+		Title:  "Updated Title",
+		Type:   model.TypeTask,
+		Status: model.StatusOpen,
+	}
+	localPath := destDir + "/MP-TABCDE.md"
+	require.NoError(t, cs.WriteEntity(localPath, task, "updated body"))
+
+	result, err := cs.CheckinTask(localPath)
+	require.NoError(t, err)
+	assert.Equal(t, "MP-TABCDE", result.ID)
+	assert.Equal(t, "Updated Title", patchBody["title"])
+	assert.Equal(t, "updated body", patchBody["body"])
+
+	// Local file should be removed
+	assert.NoFileExists(t, localPath)
+}
+
+func TestCloudStore_ResolveEntityPath_Unsupported(t *testing.T) {
 	cs := NewCloudStore("http://localhost", "key")
-
 	_, err := cs.ResolveEntityPath("MP-TABCDE")
-	assert.Error(t, err)
-
-	_, err = cs.CheckoutEntity("MP-TABCDE", "/tmp")
-	assert.Error(t, err)
-
-	_, err = cs.CheckinTask("/tmp/file.md")
-	assert.Error(t, err)
-
-	_, err = cs.CheckinDocument("/tmp/file.md")
-	assert.Error(t, err)
-
-	err = cs.WriteEntity("/tmp/file.md", nil, "")
 	assert.Error(t, err)
 }

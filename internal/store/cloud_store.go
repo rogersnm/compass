@@ -7,8 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/rogersnm/compass/internal/markdown"
 	"github.com/rogersnm/compass/internal/model"
 )
 
@@ -529,26 +533,94 @@ func (cs *CloudStore) Search(query, projectID string) ([]SearchResult, error) {
 	return results, nil
 }
 
-// --- Entity operations (local-only, not applicable to cloud) ---
+// --- Entity operations ---
 
 func (cs *CloudStore) ResolveEntityPath(entityID string) (string, error) {
 	return "", fmt.Errorf("ResolveEntityPath not supported in cloud mode")
 }
 
 func (cs *CloudStore) CheckoutEntity(entityID, destDir string) (string, error) {
-	return "", fmt.Errorf("checkout not supported in cloud mode")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("creating %s: %w", destDir, err)
+	}
+	destPath := filepath.Join(destDir, entityID+".md")
+
+	// Determine entity type from ID pattern (e.g. PROJ-TABCDE vs PROJ-DABCDE)
+	if isDocumentID(entityID) {
+		d, body, err := cs.GetDocument(entityID)
+		if err != nil {
+			return "", err
+		}
+		data, err := markdown.Marshal(d, body)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			return "", fmt.Errorf("writing %s: %w", destPath, err)
+		}
+	} else {
+		t, body, err := cs.GetTask(entityID)
+		if err != nil {
+			return "", err
+		}
+		data, err := markdown.Marshal(t, body)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			return "", fmt.Errorf("writing %s: %w", destPath, err)
+		}
+	}
+	return destPath, nil
 }
 
 func (cs *CloudStore) CheckinTask(localPath string) (*model.Task, error) {
-	return nil, fmt.Errorf("checkin not supported in cloud mode")
+	t, body, err := ReadEntity[model.Task](localPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading local file: %w", err)
+	}
+
+	updated, err := cs.UpdateTask(t.ID, TaskUpdate{
+		Title: &t.Title,
+		Body:  &body,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	os.Remove(localPath)
+	return updated, nil
 }
 
 func (cs *CloudStore) CheckinDocument(localPath string) (*model.Document, error) {
-	return nil, fmt.Errorf("checkin not supported in cloud mode")
+	d, body, err := ReadEntity[model.Document](localPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading local file: %w", err)
+	}
+
+	updated, err := cs.UpdateDocument(d.ID, &d.Title, &body)
+	if err != nil {
+		return nil, err
+	}
+
+	os.Remove(localPath)
+	return updated, nil
 }
 
 func (cs *CloudStore) WriteEntity(path string, meta any, body string) error {
-	return fmt.Errorf("WriteEntity not supported in cloud mode")
+	data, err := markdown.Marshal(meta, body)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating parent dir: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func isDocumentID(id string) bool {
+	parts := strings.SplitN(id, "-", 2)
+	return len(parts) == 2 && len(parts[1]) > 0 && parts[1][0] == 'D'
 }
 
 // --- Pagination helper ---
