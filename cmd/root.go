@@ -303,9 +303,9 @@ var configLoginCmd = &cobra.Command{
 		}
 		if d.UserCode != "" {
 			if strings.Contains(verifyURL, "?") {
-				verifyURL += "&code=" + d.UserCode
+				verifyURL += "&device_code=" + d.UserCode
 			} else {
-				verifyURL += "?code=" + d.UserCode
+				verifyURL += "?device_code=" + d.UserCode
 			}
 		}
 
