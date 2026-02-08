@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/rogersnm/compass/internal/config"
 	"github.com/rogersnm/compass/internal/markdown"
@@ -47,6 +48,20 @@ var projectShowCmd = &cobra.Command{
 	Short: "Show project details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		raw, _ := cmd.Flags().GetBool("raw")
+		if raw {
+			path, err := st.ResolveEntityPath(args[0])
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			fmt.Print(string(data))
+			return nil
+		}
+
 		p, body, err := st.GetProject(args[0])
 		if err != nil {
 			return err
@@ -119,6 +134,7 @@ var projectDeleteCmd = &cobra.Command{
 
 func init() {
 	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
+	projectShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
 	projectDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
 
 	projectCmd.AddCommand(projectCreateCmd)
