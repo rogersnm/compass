@@ -60,6 +60,6 @@ func capitalize(s string) string {
 }
 
 func init() {
-	searchCmd.Flags().StringP("project", "p", "", "filter by project")
+	searchCmd.Flags().StringP("project", "P", "", "filter by project")
 	rootCmd.AddCommand(searchCmd)
 }

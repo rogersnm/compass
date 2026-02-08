@@ -172,8 +172,8 @@ var docCheckinCmd = &cobra.Command{
 }
 
 func init() {
-	docCreateCmd.Flags().StringP("project", "p", "", "project ID")
-	docListCmd.Flags().StringP("project", "p", "", "filter by project")
+	docCreateCmd.Flags().StringP("project", "P", "", "project ID")
+	docListCmd.Flags().StringP("project", "P", "", "filter by project")
 	docUpdateCmd.Flags().String("title", "", "new title")
 	docDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
 

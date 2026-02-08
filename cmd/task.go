@@ -358,25 +358,25 @@ var taskCheckinCmd = &cobra.Command{
 }
 
 func init() {
-	taskCreateCmd.Flags().StringP("project", "p", "", "project ID")
+	taskCreateCmd.Flags().StringP("project", "P", "", "project ID")
 	taskCreateCmd.Flags().StringP("epic", "e", "", "epic ID (must reference a type=epic task)")
 	taskCreateCmd.Flags().StringP("type", "t", "task", "task type (task, epic)")
-	taskCreateCmd.Flags().IntP("priority", "P", -1, "priority (0=P0 critical, 1=P1 high, 2=P2 medium, 3=P3 low)")
+	taskCreateCmd.Flags().IntP("priority", "p", -1, "priority (0=P0 critical, 1=P1 high, 2=P2 medium, 3=P3 low)")
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
 
-	taskListCmd.Flags().StringP("project", "p", "", "filter by project")
+	taskListCmd.Flags().StringP("project", "P", "", "filter by project")
 	taskListCmd.Flags().StringP("epic", "e", "", "filter by epic")
 	taskListCmd.Flags().StringP("status", "s", "", "filter by status (open, in_progress, closed)")
 	taskListCmd.Flags().StringP("type", "t", "", "filter by type (task, epic)")
 
 	taskUpdateCmd.Flags().String("title", "", "new title")
 	taskUpdateCmd.Flags().StringP("status", "s", "", "new status (open, in_progress, closed)")
-	taskUpdateCmd.Flags().IntP("priority", "P", -1, "priority (0-3, or -1 to clear)")
+	taskUpdateCmd.Flags().IntP("priority", "p", -1, "priority (0-3, or -1 to clear)")
 	taskUpdateCmd.Flags().String("depends-on", "", "comma-separated task IDs (replaces existing)")
 
-	taskGraphCmd.Flags().StringP("project", "p", "", "project ID")
+	taskGraphCmd.Flags().StringP("project", "P", "", "project ID")
 
-	taskReadyCmd.Flags().StringP("project", "p", "", "project ID")
+	taskReadyCmd.Flags().StringP("project", "P", "", "project ID")
 	taskReadyCmd.Flags().BoolP("all", "a", false, "show all ready tasks")
 
 	taskDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
