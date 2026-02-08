@@ -21,25 +21,31 @@ go install github.com/rogersnm/compass@latest
 ## Quick Start
 
 ```bash
-# Create a project
+# Create a project (auto-generates key "MYAP" from name)
 compass project create "My App"
 
+# Or specify a key explicitly
+compass project create "My App" --key APP
+
 # Set it as default so you don't need --project everywhere
-compass project set-default PROJ-XXXXX
+compass project set-default APP
 
 # Create an epic
 compass task create "Authentication" --type epic
 
 # Create tasks with dependencies
-compass task create "Design login page" --epic TASK-AAAAA
-compass task create "Implement OAuth" --epic TASK-AAAAA
-compass task create "Write auth tests" --depends-on TASK-BBBBB,TASK-CCCCC
+compass task create "Design login page" --epic APP-TAAAAA
+compass task create "Implement OAuth" --epic APP-TAAAAA
+compass task create "Write auth tests" --depends-on APP-TBBBBB,APP-TCCCCC
 
 # See what's ready to work on
 compass task ready --all
 
 # Start working
-compass task start TASK-BBBBB
+compass task start APP-TBBBBB
+
+# Set priority (P0 = critical, P3 = low)
+compass task create "Fix login crash" --priority 0
 
 # Pipe markdown content into tasks and docs
 echo '# Login Page Spec
@@ -51,9 +57,9 @@ echo '# Login Page Spec
 
 ## Concepts
 
-**Projects** are top-level containers. Each project gets its own directory under `~/.compass/projects/`.
+**Projects** are top-level containers. Each project has a key (2-5 uppercase alphanumeric chars) that becomes part of every entity ID. Keys are auto-generated from the project name or set explicitly with `--key`.
 
-**Tasks** track work. They have a status (`open`, `in_progress`, `closed`) and can depend on other tasks. Dependencies form a DAG; compass validates acyclicity and uses topological sorting to determine what's ready.
+**Tasks** track work. They have a status (`open`, `in_progress`, `closed`), an optional priority (P0-P3), and can depend on other tasks. Dependencies form a DAG; compass validates acyclicity and uses topological sorting to determine what's ready.
 
 **Epics** are tasks with `type: epic`. They group related tasks but cannot have dependencies themselves and cannot be depended on.
 
@@ -61,32 +67,44 @@ echo '# Login Page Spec
 
 **Blocked** is computed, not stored. A task is blocked if any of its dependencies are not yet closed.
 
+## IDs
+
+IDs are project-key-based, so you can tell which project an entity belongs to at a glance:
+
+| Entity   | Format      | Example        |
+|----------|-------------|----------------|
+| Project  | `KEY`       | `AUTH`         |
+| Task     | `KEY-THASH` | `AUTH-TA7K2P`  |
+| Document | `KEY-DHASH` | `AUTH-DA7K2P`  |
+
+Keys are auto-generated from the first 4 alpha characters of the project name (uppercased). On collision, a digit is appended: `AUTH`, `AUTH2`, `AUTH3`, etc. The hash portion uses a 30-character alphabet (`23456789ABCDEFGHJKMNPQRSTUVWXYZ`) with ambiguous characters (0/O, 1/I/L) excluded.
+
 ## Commands
 
 ### Projects
 
 ```bash
-compass project create "Name"       # Create a project
-compass project list                 # List all projects
-compass project show PROJ-XXXXX     # Show project details
-compass project set-default PROJ-XXXXX  # Set default project
+compass project create "Name" [--key K]  # Create a project
+compass project list                      # List all projects
+compass project show AUTH                 # Show project details
+compass project set-default AUTH          # Set default project
 ```
 
 ### Tasks
 
 ```bash
-compass task create "Title" [--project P] [--type task|epic] [--epic E] [--depends-on T1,T2]
+compass task create "Title" [--project P] [--type task|epic] [--epic E] [--depends-on T1,T2] [--priority 0-3]
 compass task list [--project P] [--status S] [--type T] [--epic E]
-compass task show TASK-XXXXX
-compass task update TASK-XXXXX [--title T] [--status S] [--depends-on T1,T2]
-compass task edit TASK-XXXXX         # Open in $EDITOR
-compass task start TASK-XXXXX        # Shortcut: set status to in_progress
-compass task close TASK-XXXXX        # Shortcut: set status to closed
-compass task delete TASK-XXXXX
+compass task show AUTH-TXXXXX
+compass task update AUTH-TXXXXX [--title T] [--status S] [--depends-on T1,T2] [--priority 0-3]
+compass task edit AUTH-TXXXXX             # Open in $EDITOR
+compass task start AUTH-TXXXXX            # Shortcut: set status to in_progress
+compass task close AUTH-TXXXXX            # Shortcut: set status to closed
+compass task delete AUTH-TXXXXX
 compass task ready [--project P] [--all]
-compass task graph [--project P]     # ASCII dependency graph
-compass task checkout TASK-XXXXX     # Copy to .compass/ for local editing
-compass task checkin TASK-XXXXX      # Write back to store, remove local copy
+compass task graph [--project P]          # ASCII dependency graph
+compass task checkout AUTH-TXXXXX         # Copy to .compass/ for local editing
+compass task checkin AUTH-TXXXXX          # Write back to store, remove local copy
 ```
 
 ### Documents
@@ -94,12 +112,12 @@ compass task checkin TASK-XXXXX      # Write back to store, remove local copy
 ```bash
 compass doc create "Title" [--project P]
 compass doc list [--project P]
-compass doc show DOC-XXXXX
-compass doc update DOC-XXXXX [--title T]
-compass doc edit DOC-XXXXX
-compass doc delete DOC-XXXXX
-compass doc checkout DOC-XXXXX
-compass doc checkin DOC-XXXXX
+compass doc show AUTH-DXXXXX
+compass doc update AUTH-DXXXXX [--title T]
+compass doc edit AUTH-DXXXXX
+compass doc delete AUTH-DXXXXX
+compass doc checkout AUTH-DXXXXX
+compass doc checkin AUTH-DXXXXX
 ```
 
 ### Search
@@ -114,7 +132,7 @@ Tasks and documents accept markdown body content via stdin:
 
 ```bash
 echo '# Design Notes' | compass task create "Design review"
-echo '# Updated spec' | compass doc update DOC-XXXXX
+echo '# Updated spec' | compass doc update AUTH-DXXXXX
 cat spec.md | compass doc create "API Specification"
 ```
 
@@ -123,9 +141,9 @@ cat spec.md | compass doc create "API Specification"
 Compass stores data in `~/.compass/`, which is outside your working directory. AI coding tools and editors that operate on local files can use checkout/checkin to work with compass entities:
 
 ```bash
-compass task checkout TASK-XXXXX     # Copies to .compass/TASK-XXXXX.md
-# Edit .compass/TASK-XXXXX.md with any tool
-compass task checkin TASK-XXXXX      # Validates, writes back, removes local copy
+compass task checkout AUTH-TXXXXX     # Copies to .compass/AUTH-TXXXXX.md
+# Edit .compass/AUTH-TXXXXX.md with any tool
+compass task checkin AUTH-TXXXXX      # Validates, writes back, removes local copy
 ```
 
 Checkin validates frontmatter and (for tasks) checks dependency constraints before writing back. If validation fails, the local file is preserved so you can fix it.
@@ -136,12 +154,12 @@ Checkin validates frontmatter and (for tasks) checks dependency constraints befo
 ~/.compass/
 ├── config.yaml
 └── projects/
-    └── PROJ-XXXXX/
+    └── AUTH/
         ├── project.md
         ├── documents/
-        │   └── DOC-XXXXX.md
+        │   └── AUTH-DXXXXX.md
         └── tasks/
-            └── TASK-XXXXX.md
+            └── AUTH-TXXXXX.md
 ```
 
 Each file is YAML frontmatter followed by a markdown body. You can edit them directly if you want.
@@ -155,10 +173,6 @@ compass --mtp-describe    # JSON schema of all commands, args, and I/O types
 ```
 
 This lets AI tools discover compass's capabilities, understand input/output formats, and generate correct commands without hardcoded knowledge.
-
-## IDs
-
-All entities use the format `PREFIX-HASH` where PREFIX is `PROJ`, `DOC`, or `TASK`, and HASH is 5 characters from a 30-character alphabet (`23456789ABCDEFGHJKMNPQRSTUVWXYZ`). Ambiguous characters (0/O, 1/I/L) are excluded to make IDs easier to read and communicate.
 
 ## License
 
