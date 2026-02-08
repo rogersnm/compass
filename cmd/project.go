@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/huh"
 	"github.com/rogersnm/compass/internal/config"
 	"github.com/rogersnm/compass/internal/markdown"
+	"github.com/rogersnm/compass/internal/repofile"
 	"github.com/rogersnm/compass/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -134,6 +136,72 @@ var projectDeleteCmd = &cobra.Command{
 	},
 }
 
+var projectLinkCmd = &cobra.Command{
+	Use:   "link [project-id]",
+	Short: "Link the current directory to a project",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var projectID string
+		if len(args) == 1 {
+			projectID = args[0]
+		} else {
+			projects, err := st.ListProjects()
+			if err != nil {
+				return err
+			}
+			if len(projects) == 0 {
+				return fmt.Errorf("no projects exist; create one first with: compass project create <name>")
+			}
+			opts := make([]huh.Option[string], len(projects))
+			for i, p := range projects {
+				opts[i] = huh.NewOption(fmt.Sprintf("%s  %s", p.ID, p.Name), p.ID)
+			}
+			if err := huh.NewSelect[string]().
+				Title("Select a project").
+				Options(opts...).
+				Value(&projectID).
+				Run(); err != nil {
+				return fmt.Errorf("selection cancelled")
+			}
+		}
+
+		if _, _, err := st.GetProject(projectID); err != nil {
+			return fmt.Errorf("project %s not found", projectID)
+		}
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		if err := repofile.Write(cwd, projectID); err != nil {
+			return err
+		}
+		fmt.Printf("Linked %s to project %s\n", repofile.FileName, projectID)
+		return nil
+	},
+}
+
+var projectUnlinkCmd = &cobra.Command{
+	Use:   "unlink",
+	Short: "Remove the repo-local project link",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		path := cwd + "/" + repofile.FileName
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("No project linked.")
+				return nil
+			}
+			return err
+		}
+		fmt.Println("Unlinked project.")
+		return nil
+	},
+}
+
 func init() {
 	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
 	projectShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
@@ -146,5 +214,7 @@ func init() {
 	projectCmd.AddCommand(projectShowCmd)
 	projectCmd.AddCommand(projectSetDefaultCmd)
 	projectCmd.AddCommand(projectDeleteCmd)
+	projectCmd.AddCommand(projectLinkCmd)
+	projectCmd.AddCommand(projectUnlinkCmd)
 	rootCmd.AddCommand(projectCmd)
 }

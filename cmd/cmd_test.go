@@ -367,7 +367,7 @@ func TestDocCheckin(t *testing.T) {
 	assert.Equal(t, "My Doc", got.Title)
 }
 
-func TestRepoInit_Success(t *testing.T) {
+func TestProjectLink_Success(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 
@@ -376,14 +376,14 @@ func TestRepoInit_Success(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "repo", "init", p.ID))
+	require.NoError(t, run(t, "project", "link", p.ID))
 
 	got, err := repofile.Read(tmpDir)
 	require.NoError(t, err)
 	assert.Equal(t, p.ID, got)
 }
 
-func TestRepoInit_InvalidProject(t *testing.T) {
+func TestProjectLink_InvalidProject(t *testing.T) {
 	setupEnv(t)
 
 	origDir, _ := os.Getwd()
@@ -391,21 +391,10 @@ func TestRepoInit_InvalidProject(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	assert.Error(t, run(t, "repo", "init", "ZZZZ"))
+	assert.Error(t, run(t, "project", "link", "ZZZZ"))
 }
 
-func TestRepoShow_NoLink(t *testing.T) {
-	setupEnv(t)
-
-	origDir, _ := os.Getwd()
-	tmpDir := t.TempDir()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origDir)
-
-	require.NoError(t, run(t, "repo", "show"))
-}
-
-func TestRepoUnlink_Success(t *testing.T) {
+func TestProjectUnlink_Success(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 
@@ -415,7 +404,7 @@ func TestRepoUnlink_Success(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	require.NoError(t, repofile.Write(tmpDir, p.ID))
-	require.NoError(t, run(t, "repo", "unlink"))
+	require.NoError(t, run(t, "project", "unlink"))
 
 	got, err := repofile.Read(tmpDir)
 	require.NoError(t, err)

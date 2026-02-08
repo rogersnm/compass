@@ -188,20 +188,14 @@ func init() {
 					{Description: "Search across all entities", Command: "compass search \"authentication\""},
 				},
 			},
-			"repo init": {
+			"project link": {
 				Examples: []mtp.Example{
-					{Description: "Link current directory to a project", Command: "compass repo init AUTH"},
+					{Description: "Link current directory to a project", Command: "compass project link AUTH"},
 				},
 			},
-			"repo show": {
-				Stdout: &mtp.IODescriptor{
-					ContentType: "text/plain",
-					Description: "Project ID and path of the repo-local .compass-project file",
-				},
-			},
-			"repo unlink": {
+			"project unlink": {
 				Examples: []mtp.Example{
-					{Description: "Remove repo-local project link", Command: "compass repo unlink"},
+					{Description: "Remove repo-local project link", Command: "compass project unlink"},
 				},
 			},
 		},
@@ -274,5 +268,5 @@ func resolveProject(cmd *cobra.Command) (string, error) {
 	if cfg != nil && cfg.DefaultProject != "" {
 		return cfg.DefaultProject, nil
 	}
-	return "", fmt.Errorf("--project is required (or set a default with: compass project set-default <id>, or link a repo with: compass repo init)")
+	return "", fmt.Errorf("--project is required (or set a default with: compass project set-default <id>, or link a repo with: compass project link)")
 }
