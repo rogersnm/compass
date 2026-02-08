@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	version = "dev"
-	dataDir string
-	st      store.Store
-	cfg     *config.Config
+	version  = "dev"
+	dataDir  string
+	forceLocal bool
+	st       store.Store
+	cfg      *config.Config
 )
 
 func defaultDataDir() string {
@@ -36,12 +37,16 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("creating data directory: %w", err)
 		}
 
-		st = store.NewLocal(dataDir)
-
 		var err error
 		cfg, err = config.Load(dataDir)
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
+		}
+
+		if !forceLocal && cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
+			st = store.NewCloudStore(cfg.Cloud.APIURL, cfg.Cloud.APIKey)
+		} else {
+			st = store.NewLocal(dataDir)
 		}
 		return nil
 	},
@@ -50,6 +55,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory path")
+	rootCmd.PersistentFlags().BoolVar(&forceLocal, "local", false, "force local file-based storage")
 
 	mtpOpts := &mtp.DescribeOptions{
 		Commands: map[string]*mtp.CommandAnnotation{

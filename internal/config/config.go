@@ -10,7 +10,13 @@ import (
 )
 
 type Config struct {
-	DefaultProject string `yaml:"default_project,omitempty"`
+	DefaultProject string       `yaml:"default_project,omitempty"`
+	Cloud          *CloudConfig `yaml:"cloud,omitempty"`
+}
+
+type CloudConfig struct {
+	APIURL string `yaml:"api_url"`
+	APIKey string `yaml:"api_key"`
 }
 
 func Load(dataDir string) (*Config, error) {
