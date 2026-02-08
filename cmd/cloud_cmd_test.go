@@ -409,7 +409,7 @@ func TestCloudRouting_PromptWhenNoConfig(t *testing.T) {
 	// Non-interactive stdin falls through to default error
 	err := run(t, "project", "list")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "compass auth login")
+	assert.Contains(t, err.Error(), "compass config login")
 }
 
 func TestCloudRouting_LocalMode(t *testing.T) {
@@ -422,6 +422,64 @@ func TestCloudRouting_LocalMode(t *testing.T) {
 	// Should work fine with local store, even without cloud config
 	err := run(t, "project", "list")
 	assert.NoError(t, err)
+}
+
+// --- Config command tests ---
+
+func TestConfig_StatusLocal(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	cfg = &config.Config{Mode: "local"}
+	require.NoError(t, config.Save(dir, cfg))
+
+	require.NoError(t, run(t, "config", "status"))
+}
+
+func TestConfig_StatusCloud(t *testing.T) {
+	setupCloudEnv(t)
+
+	require.NoError(t, run(t, "config", "status"))
+}
+
+func TestConfig_StatusUnconfigured(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	cfg = &config.Config{}
+	require.NoError(t, config.Save(dir, cfg))
+
+	// config status should work even without a configured store
+	require.NoError(t, run(t, "config", "status"))
+}
+
+func TestConfig_Logout(t *testing.T) {
+	setupCloudEnv(t)
+
+	require.NoError(t, run(t, "config", "logout"))
+
+	c, err := config.Load(dataDir)
+	require.NoError(t, err)
+	assert.Nil(t, c.Cloud)
+}
+
+func TestConfig_LogoutWhenLocal(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	cfg = &config.Config{Mode: "local"}
+	require.NoError(t, config.Save(dir, cfg))
+
+	// Logout when already local should succeed without error
+	require.NoError(t, run(t, "config", "logout"))
+}
+
+func TestConfig_BypassesSetupPrompt(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	cfg = &config.Config{}
+	require.NoError(t, config.Save(dir, cfg))
+
+	// config subcommands should not trigger the setup prompt
+	require.NoError(t, run(t, "config", "status"))
+	require.NoError(t, run(t, "config", "logout"))
 }
 
 // --- Cloud mode project tests ---

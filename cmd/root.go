@@ -1,9 +1,15 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	mtp "github.com/modeltoolsprotocol/go-sdk"
@@ -43,12 +49,18 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
+		// Config commands work without a configured store
+		if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
+			st = store.NewLocal(dataDir)
+			return nil
+		}
+
 		if cfg.Mode == "local" {
 			st = store.NewLocal(dataDir)
 		} else if cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
 			st = store.NewCloudStore(cfg.Cloud.APIKey)
 		} else {
-			return promptSetup(cmd)
+			return runSetupPrompt(cmd)
 		}
 		return nil
 	},
@@ -210,15 +222,8 @@ func Execute() error {
 
 const signupURL = "https://compasscloud.io/signup"
 
-// promptSetup is shown on first run when no cloud config exists.
-// It lets the user log in, create an account, or bail out.
-func promptSetup(cmd *cobra.Command) error {
-	// If the user is already running "auth login", let it through
-	if cmd.Name() == "login" && cmd.Parent() != nil && cmd.Parent().Name() == "auth" {
-		st = store.NewLocal(dataDir)
-		return nil
-	}
-
+// runSetupPrompt presents the interactive mode selection prompt.
+func runSetupPrompt(cmd *cobra.Command) error {
 	var choice string
 	err := huh.NewSelect[string]().
 		Title("Welcome to Compass!").
@@ -230,16 +235,16 @@ func promptSetup(cmd *cobra.Command) error {
 		Value(&choice).
 		Run()
 	if err != nil {
-		return fmt.Errorf("run 'compass auth login' to get started")
+		return fmt.Errorf("run 'compass config login' to get started")
 	}
 
 	switch choice {
 	case "login":
 		fmt.Println()
-		return authLoginCmd.RunE(cmd, nil)
+		return configLoginCmd.RunE(cmd, nil)
 	case "signup":
 		openBrowser(signupURL)
-		fmt.Println("Opening browser... after signing up, run: compass auth login")
+		fmt.Println("Opening browser... after signing up, run: compass config login")
 		return fmt.Errorf("setup incomplete")
 	case "local":
 		cfg.Mode = "local"
@@ -250,8 +255,204 @@ func promptSetup(cmd *cobra.Command) error {
 		fmt.Println("Local mode enabled. Data will be stored in " + dataDir)
 		return nil
 	default:
-		return fmt.Errorf("run 'compass auth login' to get started")
+		return fmt.Errorf("run 'compass config login' to get started")
 	}
+}
+
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Configure Compass (mode, authentication)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSetupPrompt(cmd)
+	},
+}
+
+var configLoginCmd = &cobra.Command{
+	Use:   "login",
+	Short: "Authenticate with Compass Cloud via device flow",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		server := store.CloudAPIBase
+
+		resp, err := http.Post(server+"/auth/device", "application/json", nil)
+		if err != nil {
+			return fmt.Errorf("requesting device code: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("device code request failed with status %d", resp.StatusCode)
+		}
+
+		var deviceResp struct {
+			Data struct {
+				DeviceCode      string `json:"device_code"`
+				UserCode        string `json:"user_code"`
+				VerificationURI string `json:"verification_uri"`
+				ExpiresIn       int    `json:"expires_in"`
+				Interval        int    `json:"interval"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
+			return fmt.Errorf("decoding device response: %w", err)
+		}
+		d := deviceResp.Data
+
+		verifyURL := d.VerificationURI
+		if verifyURL != "" && verifyURL[0] == '/' {
+			verifyURL = server + verifyURL
+		}
+
+		fmt.Printf("Open this URL in your browser:\n  %s\n\n", verifyURL)
+		fmt.Printf("Enter code: %s\n\n", d.UserCode)
+		fmt.Println("Waiting for authorization...")
+
+		openBrowser(verifyURL)
+
+		interval := time.Duration(d.Interval) * time.Second
+		if interval < time.Second {
+			interval = 5 * time.Second
+		}
+		deadline := time.Now().Add(time.Duration(d.ExpiresIn) * time.Second)
+
+		for time.Now().Before(deadline) {
+			time.Sleep(interval)
+
+			tokenResp, err := pollToken(server, d.DeviceCode)
+			if err != nil {
+				return err
+			}
+
+			if tokenResp.Status == "pending" {
+				continue
+			}
+
+			if tokenResp.Status == "authorized" {
+				cfg.Cloud = &config.CloudConfig{
+					APIKey: tokenResp.APIKey,
+				}
+				cfg.Mode = ""
+				if err := config.Save(dataDir, cfg); err != nil {
+					return fmt.Errorf("saving config: %w", err)
+				}
+
+				orgInfo := ""
+				if tokenResp.OrgName != "" {
+					orgInfo = fmt.Sprintf(" (%s)", tokenResp.OrgName)
+				}
+				fmt.Printf("Authenticated%s\n", orgInfo)
+				return nil
+			}
+
+			return fmt.Errorf("unexpected status: %s", tokenResp.Status)
+		}
+
+		return fmt.Errorf("authorization timed out")
+	},
+}
+
+var configLogoutCmd = &cobra.Command{
+	Use:   "logout",
+	Short: "Log out of Compass Cloud",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg.Cloud = nil
+		if err := config.Save(dataDir, cfg); err != nil {
+			return fmt.Errorf("saving config: %w", err)
+		}
+		fmt.Println("Logged out")
+		return nil
+	},
+}
+
+var configStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show current configuration and authentication status",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if cfg.Mode == "local" {
+			fmt.Println("Mode: local")
+			fmt.Println("Data: " + dataDir)
+			return nil
+		}
+		if cfg.Cloud == nil || cfg.Cloud.APIKey == "" {
+			fmt.Println("Not configured. Run: compass config")
+			return nil
+		}
+		fmt.Println("Mode: cloud")
+		fmt.Printf("Server: %s\n", store.CloudAPIBase)
+		fmt.Printf("API key: %s...\n", cfg.Cloud.APIKey[:min(8, len(cfg.Cloud.APIKey))])
+		return nil
+	},
+}
+
+type tokenResult struct {
+	Status  string
+	APIKey  string
+	OrgName string
+}
+
+func pollToken(server, deviceCode string) (*tokenResult, error) {
+	body := fmt.Sprintf(`{"device_code":"%s"}`, deviceCode)
+	resp, err := http.Post(
+		server+"/auth/device/token",
+		"application/json",
+		strings.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("polling token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var tokenResp struct {
+		Data struct {
+			Status string `json:"status"`
+			APIKey string `json:"api_key"`
+			Org    *struct {
+				Slug string `json:"slug"`
+				Name string `json:"name"`
+			} `json:"org"`
+		} `json:"data"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, fmt.Errorf("decoding token response: %w", err)
+	}
+
+	if tokenResp.Error != nil {
+		return nil, fmt.Errorf("token error: %s", tokenResp.Error.Message)
+	}
+
+	result := &tokenResult{
+		Status: tokenResp.Data.Status,
+		APIKey: tokenResp.Data.APIKey,
+	}
+	if tokenResp.Data.Org != nil {
+		result.OrgName = tokenResp.Data.Org.Name
+	}
+	return result, nil
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	}
+	if cmd != nil {
+		cmd.Start()
+	}
+}
+
+func init() {
+	configCmd.AddCommand(configLoginCmd)
+	configCmd.AddCommand(configLogoutCmd)
+	configCmd.AddCommand(configStatusCmd)
+	rootCmd.AddCommand(configCmd)
 }
 
 // resolveProject returns the project ID from the flag, repo-local file, or global default.
