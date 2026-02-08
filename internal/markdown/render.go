@@ -27,7 +27,9 @@ func termWidth() int {
 }
 
 func RenderMarkdown(content string) (string, error) {
-	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(termWidth()))
+	// glamour's default styles add a 2-char left margin to the document block;
+	// subtract it so rendered output fits the terminal without overflow.
+	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(termWidth()-2))
 	if err != nil {
 		return "", fmt.Errorf("creating renderer: %w", err)
 	}
