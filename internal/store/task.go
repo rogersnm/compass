@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"sort"
+
 	"github.com/rogersnm/compass/internal/dag"
 	"github.com/rogersnm/compass/internal/id"
 	"github.com/rogersnm/compass/internal/model"
@@ -201,52 +203,30 @@ func (s *Store) AllTaskMap(projectID string) (map[string]*model.Task, error) {
 	return m, nil
 }
 
-// ReadyTasks returns open, unblocked tasks (type=task only) in topological order.
+// ReadyTasks returns open, unblocked tasks (type=task only), oldest first.
 func (s *Store) ReadyTasks(projectID string) ([]*model.Task, error) {
 	tasks, err := s.ListTasks(TaskFilter{ProjectID: projectID, Type: model.TypeTask})
 	if err != nil {
 		return nil, err
 	}
 
-	// Build task map for blocked check
 	allTasks, err := s.AllTaskMap(projectID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter to open, unblocked
-	var candidates []*model.Task
-	candidateSet := make(map[string]bool)
+	var ready []*model.Task
 	for i := range tasks {
 		t := &tasks[i]
 		if t.Status == model.StatusOpen && !t.IsBlocked(allTasks) {
-			candidates = append(candidates, t)
-			candidateSet[t.ID] = true
+			ready = append(ready, t)
 		}
 	}
 
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	// Sort by topological order for determinism
-	ptrs := make([]*model.Task, 0, len(tasks))
-	for i := range tasks {
-		ptrs = append(ptrs, &tasks[i])
-	}
-	g := dag.BuildFromTasks(ptrs)
-	order, err := g.TopologicalSort()
-	if err != nil {
-		return candidates, nil // fallback to unsorted
-	}
-
-	var result []*model.Task
-	for _, id := range order {
-		if candidateSet[id] {
-			result = append(result, allTasks[id])
-		}
-	}
-	return result, nil
+	sort.Slice(ready, func(i, j int) bool {
+		return ready[i].CreatedAt.Before(ready[j].CreatedAt)
+	})
+	return ready, nil
 }
 
 func (s *Store) validateDeps(t *model.Task, projectID string) error {

@@ -89,12 +89,12 @@ func renderNode(sb *strings.Builder, g *Graph, id, prefix string, isLast bool, v
 	sort.Strings(children)
 
 	childPrefix := prefix
-	if prefix != "" {
-		if isLast {
-			childPrefix += "    "
-		} else {
-			childPrefix += "│   "
-		}
+	if prefix == "" {
+		childPrefix = "    "
+	} else if isLast {
+		childPrefix += "    "
+	} else {
+		childPrefix += "│   "
 	}
 
 	for i, child := range children {
