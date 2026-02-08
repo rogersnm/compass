@@ -249,6 +249,30 @@ func TestDocDelete_Force(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestProjectDelete_Force(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))
+
+	_, _, err := s.GetProject(p.ID)
+	assert.Error(t, err)
+}
+
+func TestProjectDelete_ClearsDefault(t *testing.T) {
+	s, dir := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	cfg = &config.Config{DefaultProject: p.ID}
+	config.Save(dir, cfg)
+
+	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))
+
+	c, err := config.Load(dir)
+	require.NoError(t, err)
+	assert.Empty(t, c.DefaultProject)
+}
+
 func TestTaskGraph(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")

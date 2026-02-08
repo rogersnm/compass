@@ -5,6 +5,7 @@ import (
 
 	"github.com/rogersnm/compass/internal/config"
 	"github.com/rogersnm/compass/internal/markdown"
+	"github.com/rogersnm/compass/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -85,11 +86,45 @@ var projectSetDefaultCmd = &cobra.Command{
 	},
 }
 
+var projectDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Delete a project and all its tasks and documents",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p, _, err := st.GetProject(args[0])
+		if err != nil {
+			return err
+		}
+
+		tasks, _ := st.ListTasks(store.TaskFilter{ProjectID: p.ID})
+		docs, _ := st.ListDocuments(p.ID)
+		fmt.Printf("Project: %s (%s), %d tasks, %d documents\n", p.Name, p.ID, len(tasks), len(docs))
+
+		if err := confirmDelete(cmd, p.ID); err != nil {
+			return err
+		}
+		if err := st.DeleteProject(p.ID); err != nil {
+			return err
+		}
+
+		if cfg.DefaultProject == p.ID {
+			cfg.DefaultProject = ""
+			config.Save(dataDir, cfg)
+		}
+
+		fmt.Printf("Deleted project %s\n", p.ID)
+		return nil
+	},
+}
+
 func init() {
 	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
+	projectDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
+
 	projectCmd.AddCommand(projectCreateCmd)
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectShowCmd)
 	projectCmd.AddCommand(projectSetDefaultCmd)
+	projectCmd.AddCommand(projectDeleteCmd)
 	rootCmd.AddCommand(projectCmd)
 }

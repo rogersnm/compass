@@ -640,6 +640,28 @@ func TestDeleteDocument_NotFound(t *testing.T) {
 	assert.Error(t, s.DeleteDocument("ZZZZ-DZZZZZ"))
 }
 
+func TestDeleteProject(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	s.CreateTask("Task", p.ID, TaskCreateOpts{})
+	s.CreateDocument("Doc", p.ID, "body")
+
+	require.NoError(t, s.DeleteProject(p.ID))
+
+	_, _, err := s.GetProject(p.ID)
+	assert.Error(t, err)
+	// Tasks and docs should be gone too
+	tasks, _ := s.ListTasks(TaskFilter{ProjectID: p.ID})
+	assert.Empty(t, tasks)
+	docs, _ := s.ListDocuments(p.ID)
+	assert.Empty(t, docs)
+}
+
+func TestDeleteProject_NotFound(t *testing.T) {
+	s := newTestStore(t)
+	assert.Error(t, s.DeleteProject("ZZZZ"))
+}
+
 // --- Search tests ---
 
 func TestSearch_MatchTitle(t *testing.T) {

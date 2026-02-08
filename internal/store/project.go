@@ -82,6 +82,14 @@ func (s *Store) GetProject(projectID string) (*model.Project, string, error) {
 	return &p, body, nil
 }
 
+func (s *Store) DeleteProject(projectID string) error {
+	dir := s.ProjectDir(projectID)
+	if _, err := os.Stat(dir); err != nil {
+		return fmt.Errorf("%s not found", projectID)
+	}
+	return os.RemoveAll(dir)
+}
+
 func (s *Store) ListProjects() ([]model.Project, error) {
 	dirs, err := s.listProjectDirs()
 	if err != nil {
