@@ -27,7 +27,10 @@ compass project create "My App"
 # Or specify a key explicitly
 compass project create "My App" --key APP
 
-# Set it as default so you don't need --project everywhere
+# Link this repo to the project (writes .compass-project in cwd)
+compass repo init APP
+
+# Or set a global default instead
 compass project set-default APP
 
 # Create an epic
@@ -120,6 +123,14 @@ compass doc checkout AUTH-DXXXXX
 compass doc checkin AUTH-DXXXXX
 ```
 
+### Repo Linking
+
+```bash
+compass repo init [PROJECT-ID]          # Link cwd to a project (writes .compass-project)
+compass repo show                       # Show current repo-project link
+compass repo unlink                     # Remove .compass-project from cwd
+```
+
 ### Search
 
 ```bash
@@ -135,6 +146,16 @@ echo '# Design Notes' | compass task create "Design review"
 echo '# Updated spec' | compass doc update AUTH-DXXXXX
 cat spec.md | compass doc create "API Specification"
 ```
+
+## Project Resolution
+
+Commands that need a project resolve it in this order:
+
+1. `--project` / `-P` flag (explicit, highest priority)
+2. `.compass-project` file in the current directory or any ancestor
+3. Global default from `compass project set-default`
+
+The `.compass-project` file is a single-line text file containing a project key (like `.nvmrc` or `.node-version`). Run `compass repo init` to create one.
 
 ## Checkout / Checkin
 
