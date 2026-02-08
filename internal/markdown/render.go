@@ -2,10 +2,12 @@ package markdown
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 )
 
 var (
@@ -17,8 +19,15 @@ var (
 	blockedSty  = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
+func termWidth() int {
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		return w
+	}
+	return 80
+}
+
 func RenderMarkdown(content string) (string, error) {
-	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle())
+	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(termWidth()))
 	if err != nil {
 		return "", fmt.Errorf("creating renderer: %w", err)
 	}
