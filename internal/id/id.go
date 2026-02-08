@@ -14,11 +14,10 @@ type EntityType string
 const (
 	Project  EntityType = "PROJ"
 	Document EntityType = "DOC"
-	Epic     EntityType = "EPIC"
 	Task     EntityType = "TASK"
 )
 
-var allTypes = []EntityType{Project, Document, Epic, Task}
+var allTypes = []EntityType{Project, Document, Task}
 
 func New(t EntityType) (string, error) {
 	b := make([]byte, hashLen)

@@ -1,0 +1,50 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - main: .
+    binary: compass
+    ldflags:
+      - -s -w
+      - -X github.com/rogersnm/compass/cmd.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "compass_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - repository:
+      owner: rogersnm
+      name: homebrew-tap
+    homepage: "https://github.com/rogersnm/compass"
+    description: "Markdown-native task and document tracking"
+    license: "MIT"
+    install: |
+      bin.install "compass"

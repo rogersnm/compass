@@ -10,6 +10,7 @@ import (
 
 	"github.com/rogersnm/compass/internal/id"
 	"github.com/rogersnm/compass/internal/markdown"
+	"github.com/rogersnm/compass/internal/model"
 )
 
 type Store struct {
@@ -31,7 +32,6 @@ func (s *Store) ProjectDir(projectID string) string {
 func (s *Store) EnsureProjectDirs(projectID string) error {
 	dirs := []string{
 		filepath.Join(s.ProjectDir(projectID), "documents"),
-		filepath.Join(s.ProjectDir(projectID), "epics"),
 		filepath.Join(s.ProjectDir(projectID), "tasks"),
 	}
 	for _, d := range dirs {
@@ -100,9 +100,6 @@ func (s *Store) ResolveEntityPath(entityID string) (string, error) {
 		case id.Document:
 			searchDir = filepath.Join(projDir, "documents")
 			filename = entityID + ".md"
-		case id.Epic:
-			searchDir = filepath.Join(projDir, "epics")
-			filename = entityID + ".md"
 		case id.Task:
 			searchDir = filepath.Join(projDir, "tasks")
 			filename = entityID + ".md"
@@ -132,6 +129,73 @@ func (s *Store) listProjectDirs() ([]string, error) {
 		}
 	}
 	return dirs, nil
+}
+
+// CheckoutEntity copies an entity's .md file to destDir/<ID>.md and returns the local path.
+func (s *Store) CheckoutEntity(entityID, destDir string) (string, error) {
+	srcPath, err := s.ResolveEntityPath(entityID)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", srcPath, err)
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return "", fmt.Errorf("creating %s: %w", destDir, err)
+	}
+	destPath := filepath.Join(destDir, entityID+".md")
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", destPath, err)
+	}
+	return destPath, nil
+}
+
+// CheckinTask reads a local task file, validates it, writes it back to the store, and removes the local file.
+func (s *Store) CheckinTask(localPath string) (*model.Task, error) {
+	t, body, err := ReadEntity[model.Task](localPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading local file: %w", err)
+	}
+	if err := t.Validate(); err != nil {
+		return nil, err
+	}
+	if len(t.DependsOn) > 0 {
+		if err := s.validateDeps(&t, t.Project); err != nil {
+			return nil, err
+		}
+	}
+	t.UpdatedAt = now()
+	storePath, err := s.ResolveEntityPath(t.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.WriteEntity(storePath, &t, body); err != nil {
+		return nil, err
+	}
+	os.Remove(localPath)
+	return &t, nil
+}
+
+// CheckinDocument reads a local document file, validates it, writes it back to the store, and removes the local file.
+func (s *Store) CheckinDocument(localPath string) (*model.Document, error) {
+	d, body, err := ReadEntity[model.Document](localPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading local file: %w", err)
+	}
+	if err := d.Validate(); err != nil {
+		return nil, err
+	}
+	d.UpdatedAt = now()
+	storePath, err := s.ResolveEntityPath(d.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.WriteEntity(storePath, &d, body); err != nil {
+		return nil, err
+	}
+	os.Remove(localPath)
+	return &d, nil
 }
 
 func now() time.Time {

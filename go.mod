@@ -6,7 +6,7 @@ require (
 	github.com/adrg/frontmatter v0.2.0
 	github.com/charmbracelet/glamour v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/modeltoolsprotocol/go-sdk v0.0.0
+	github.com/modeltoolsprotocol/go-sdk v0.1.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.10.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -42,5 +42,3 @@ require (
 	golang.org/x/term v0.22.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
-
-replace github.com/modeltoolsprotocol/go-sdk => /Users/nick/git/modeltoolsprotocol/go-sdk

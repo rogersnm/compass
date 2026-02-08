@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	version = "dev"
 	dataDir string
 	st      *store.Store
 	cfg     *config.Config
@@ -28,7 +29,7 @@ func defaultDataDir() string {
 var rootCmd = &cobra.Command{
 	Use:     "compass",
 	Short:   "Markdown-native task and document tracking",
-	Version: "0.1.0",
+	Version: version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
 			return fmt.Errorf("creating data directory: %w", err)
@@ -65,13 +66,34 @@ func init() {
 					{Description: "Create doc with piped content", Command: "echo '# Design' | compass doc create \"Design Doc\" --project PROJ-XXXXX"},
 				},
 			},
-			"epic create": {
-				Stdin: &mtp.IODescriptor{
-					ContentType: "text/markdown",
-					Description: "Markdown body content for the epic",
+			"doc checkout": {
+				Stdout: &mtp.IODescriptor{
+					ContentType: "text/plain",
+					Description: "Local file path where the document was checked out (e.g. .compass/DOC-XXXXX.md)",
 				},
 				Examples: []mtp.Example{
-					{Description: "Create an epic", Command: "compass epic create \"Auth\" --project PROJ-XXXXX"},
+					{Description: "Checkout a document for local editing", Command: "compass doc checkout DOC-XXXXX"},
+				},
+			},
+			"doc checkin": {
+				Examples: []mtp.Example{
+					{Description: "Check in a locally edited document", Command: "compass doc checkin DOC-XXXXX"},
+				},
+			},
+			"doc update": {
+				Stdin: &mtp.IODescriptor{
+					ContentType: "text/markdown",
+					Description: "New markdown body content for the document",
+				},
+				Examples: []mtp.Example{
+					{Description: "Update document title", Command: "compass doc update DOC-XXXXX --title \"New Title\""},
+					{Description: "Update document body", Command: "echo '# Updated' | compass doc update DOC-XXXXX"},
+				},
+			},
+			"doc delete": {
+				Examples: []mtp.Example{
+					{Description: "Delete a document (interactive confirm)", Command: "compass doc delete DOC-XXXXX"},
+					{Description: "Delete a document (skip confirm)", Command: "compass doc delete DOC-XXXXX --force"},
 				},
 			},
 			"task create": {
@@ -80,7 +102,58 @@ func init() {
 					Description: "Markdown body content for the task",
 				},
 				Examples: []mtp.Example{
-					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project PROJ-XXXXX --epic EPIC-XXXXX --depends-on TASK-AAAAA,TASK-BBBBB"},
+					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project PROJ-XXXXX --epic TASK-XXXXX --depends-on TASK-AAAAA,TASK-BBBBB"},
+					{Description: "Create an epic", Command: "compass task create \"Auth\" --project PROJ-XXXXX --type epic"},
+				},
+			},
+			"task start": {
+				Examples: []mtp.Example{
+					{Description: "Start a task", Command: "compass task start TASK-XXXXX"},
+				},
+			},
+			"task close": {
+				Examples: []mtp.Example{
+					{Description: "Close a task", Command: "compass task close TASK-XXXXX"},
+				},
+			},
+			"task ready": {
+				Stdout: &mtp.IODescriptor{
+					ContentType: "text/plain",
+					Description: "Next ready task or table of all ready tasks with --all",
+				},
+				Examples: []mtp.Example{
+					{Description: "Show next ready task", Command: "compass task ready --project PROJ-XXXXX"},
+					{Description: "Show all ready tasks", Command: "compass task ready --project PROJ-XXXXX --all"},
+				},
+			},
+			"task update": {
+				Stdin: &mtp.IODescriptor{
+					ContentType: "text/markdown",
+					Description: "New markdown body content for the task",
+				},
+				Examples: []mtp.Example{
+					{Description: "Update task title", Command: "compass task update TASK-XXXXX --title \"New Title\""},
+					{Description: "Update task body", Command: "echo '# Updated' | compass task update TASK-XXXXX"},
+				},
+			},
+			"task delete": {
+				Examples: []mtp.Example{
+					{Description: "Delete a task (interactive confirm)", Command: "compass task delete TASK-XXXXX"},
+					{Description: "Delete a task (skip confirm)", Command: "compass task delete TASK-XXXXX --force"},
+				},
+			},
+			"task checkout": {
+				Stdout: &mtp.IODescriptor{
+					ContentType: "text/plain",
+					Description: "Local file path where the task was checked out (e.g. .compass/TASK-XXXXX.md)",
+				},
+				Examples: []mtp.Example{
+					{Description: "Checkout a task for local editing", Command: "compass task checkout TASK-XXXXX"},
+				},
+			},
+			"task checkin": {
+				Examples: []mtp.Example{
+					{Description: "Check in a locally edited task", Command: "compass task checkin TASK-XXXXX"},
 				},
 			},
 			"task list": {

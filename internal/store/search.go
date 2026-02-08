@@ -56,24 +56,6 @@ func (s *Store) Search(query, projectID string) ([]SearchResult, error) {
 		}
 	}
 
-	epics, err := s.ListEpics(filterProject)
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range epics {
-		if matchesQuery(q, e.Title) {
-			results = append(results, SearchResult{Type: "epic", ID: e.ID, Title: e.Title})
-		}
-		if _, body, err := s.GetEpic(e.ID); err == nil && matchesQuery(q, body) {
-			if !hasResult(results, e.ID) {
-				results = append(results, SearchResult{
-					Type: "epic", ID: e.ID, Title: e.Title,
-					Snippet: snippet(body, q),
-				})
-			}
-		}
-	}
-
 	tasks, err := s.ListTasks(TaskFilter{ProjectID: filterProject})
 	if err != nil {
 		return nil, err

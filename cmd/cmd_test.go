@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rogersnm/compass/internal/config"
@@ -85,19 +87,6 @@ func TestDocCreate_DefaultProject(t *testing.T) {
 	assert.Len(t, docs, 1)
 }
 
-func TestEpicCreate_Success(t *testing.T) {
-	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
-
-	require.NoError(t, run(t, "epic", "create", "Auth Epic", "--project", p.ID))
-
-	epics, err := s.ListEpics(p.ID)
-	require.NoError(t, err)
-	assert.Len(t, epics, 1)
-	assert.Equal(t, "Auth Epic", epics[0].Title)
-	assert.Equal(t, model.StatusOpen, epics[0].Status)
-}
-
 func TestTaskCreate_Minimal(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("P", "")
@@ -107,6 +96,20 @@ func TestTaskCreate_Minimal(t *testing.T) {
 	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
+	assert.Equal(t, model.TypeTask, tasks[0].Type)
+}
+
+func TestTaskCreate_EpicType(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+
+	require.NoError(t, run(t, "task", "create", "Auth Epic", "--project", p.ID, "--type", "epic"))
+
+	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID, Type: model.TypeEpic})
+	require.NoError(t, err)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "Auth Epic", tasks[0].Title)
+	assert.Equal(t, model.TypeEpic, tasks[0].Type)
 }
 
 func TestTaskCreate_WithDeps(t *testing.T) {
@@ -114,7 +117,7 @@ func TestTaskCreate_WithDeps(t *testing.T) {
 	p, _ := s.CreateProject("P", "")
 	t1, _ := s.CreateTask("Dep", p.ID, store.TaskCreateOpts{})
 
-	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--depends-on", t1.ID))
+	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--type", "task", "--depends-on", t1.ID))
 
 	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
 	require.NoError(t, err)
@@ -133,6 +136,71 @@ func TestTaskUpdate_Status(t *testing.T) {
 	assert.Equal(t, model.StatusInProgress, got.Status)
 }
 
+func TestTaskStart(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "start", task.ID))
+
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusInProgress, got.Status)
+}
+
+func TestTaskClose(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "close", task.ID))
+
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusClosed, got.Status)
+}
+
+func TestTaskReady(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	cfg = &config.Config{DefaultProject: p.ID}
+	s.CreateTask("Ready Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "ready", "--project", p.ID))
+}
+
+func TestTaskReady_All(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	cfg = &config.Config{DefaultProject: p.ID}
+	s.CreateTask("T1", p.ID, store.TaskCreateOpts{})
+	s.CreateTask("T2", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "ready", "--project", p.ID, "--all"))
+}
+
+func TestTaskDelete_Force(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "delete", task.ID, "--force"))
+
+	_, _, err := s.GetTask(task.ID)
+	assert.Error(t, err)
+}
+
+func TestDocDelete_Force(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	d, _ := s.CreateDocument("Doc", p.ID, "body")
+
+	require.NoError(t, run(t, "doc", "delete", d.ID, "--force"))
+
+	_, _, err := s.GetDocument(d.ID)
+	assert.Error(t, err)
+}
+
 func TestTaskGraph(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("P", "")
@@ -146,6 +214,83 @@ func TestSearch_NoResults(t *testing.T) {
 	s, _ := setupEnv(t)
 	s.CreateProject("Test", "")
 	require.NoError(t, run(t, "search", "xyznonexistent"))
+}
+
+func TestTaskCheckout(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "task body"})
+
+	// Change to a temp dir so .compass/ is created there
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "task", "checkout", task.ID))
+
+	localPath := filepath.Join(".compass", task.ID+".md")
+	assert.FileExists(t, localPath)
+}
+
+func TestTaskCheckin(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "old body"})
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "task", "checkout", task.ID))
+	require.NoError(t, run(t, "task", "checkin", task.ID))
+
+	// Local file should be gone
+	localPath := filepath.Join(".compass", task.ID+".md")
+	assert.NoFileExists(t, localPath)
+
+	// Store should still have the task
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "My Task", got.Title)
+}
+
+func TestDocCheckout(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "doc", "checkout", doc.ID))
+
+	localPath := filepath.Join(".compass", doc.ID+".md")
+	assert.FileExists(t, localPath)
+}
+
+func TestDocCheckin(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	doc, _ := s.CreateDocument("My Doc", p.ID, "old body")
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, run(t, "doc", "checkout", doc.ID))
+	require.NoError(t, run(t, "doc", "checkin", doc.ID))
+
+	localPath := filepath.Join(".compass", doc.ID+".md")
+	assert.NoFileExists(t, localPath)
+
+	got, _, err := s.GetDocument(doc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "My Doc", got.Title)
 }
 
 func TestE2EWorkflow(t *testing.T) {
@@ -164,11 +309,11 @@ func TestE2EWorkflow(t *testing.T) {
 	_ = d1
 	_ = d2
 
-	// 4. Create epic
-	e, _ := s.CreateEpic("Auth Epic", p.ID, "")
+	// 4. Create epic (now a task with type=epic)
+	epic, _ := s.CreateTask("Auth Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
 
 	// 5. Create tasks
-	tA, _ := s.CreateTask("Task A", p.ID, store.TaskCreateOpts{Epic: e.ID})
+	tA, _ := s.CreateTask("Task A", p.ID, store.TaskCreateOpts{Epic: epic.ID})
 	_, _ = s.CreateTask("Task B", p.ID, store.TaskCreateOpts{})
 	tC, _ := s.CreateTask("Task C", p.ID, store.TaskCreateOpts{DependsOn: []string{tA.ID}})
 
@@ -176,7 +321,7 @@ func TestE2EWorkflow(t *testing.T) {
 	docs, _ := s.ListDocuments(p.ID)
 	assert.Len(t, docs, 2)
 	tasks, _ := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
-	assert.Len(t, tasks, 3)
+	assert.Len(t, tasks, 4) // 3 tasks + 1 epic
 
 	// 7. Task C should be blocked
 	allTasks, _ := s.AllTaskMap(p.ID)
@@ -197,4 +342,9 @@ func TestE2EWorkflow(t *testing.T) {
 	// 11. Search
 	results, _ := s.Search("Auth", "")
 	assert.GreaterOrEqual(t, len(results), 1)
+
+	// 12. Ready tasks
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(ready), 1)
 }

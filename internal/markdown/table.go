@@ -33,18 +33,6 @@ func RenderDocumentTable(docs []model.Document) string {
 	return renderTable([]string{"ID", "Title", "Project", "Created"}, rows)
 }
 
-func RenderEpicTable(epics []model.Epic) string {
-	if len(epics) == 0 {
-		return "No epics found."
-	}
-	rows := make([][]string, len(epics))
-	for i, e := range epics {
-		status := StatusStyle(string(e.Status)).Render(string(e.Status))
-		rows[i] = []string{e.ID, e.Title, status, e.Project}
-	}
-	return renderTable([]string{"ID", "Title", "Status", "Project"}, rows)
-}
-
 func RenderTaskTable(tasks []model.Task, allTasks map[string]*model.Task) string {
 	if len(tasks) == 0 {
 		return "No tasks found."

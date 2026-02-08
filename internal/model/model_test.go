@@ -21,22 +21,41 @@ func TestProject_Validate_MissingID(t *testing.T) {
 	assert.Error(t, p.Validate())
 }
 
-func TestEpic_Validate_InvalidStatus(t *testing.T) {
-	e := &Epic{ID: "EPIC-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Status: "done"}
-	assert.Error(t, e.Validate())
-}
-
 func TestTask_Validate_ValidStatuses(t *testing.T) {
 	for _, s := range []Status{StatusOpen, StatusInProgress, StatusClosed} {
-		task := &Task{ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Status: s}
+		task := &Task{ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Type: TypeTask, Status: s}
 		assert.NoError(t, task.Validate())
 	}
+}
+
+func TestTask_Validate_DefaultTypeInvalid(t *testing.T) {
+	task := &Task{ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Status: StatusOpen}
+	assert.Error(t, task.Validate())
+}
+
+func TestTask_Validate_InvalidType(t *testing.T) {
+	task := &Task{ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Type: "story", Status: StatusOpen}
+	assert.Error(t, task.Validate())
+}
+
+func TestTask_Validate_EpicType(t *testing.T) {
+	task := &Task{ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE", Type: TypeEpic, Status: StatusOpen}
+	assert.NoError(t, task.Validate())
+}
+
+func TestTask_Validate_EpicCannotHaveDeps(t *testing.T) {
+	task := &Task{
+		ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE",
+		Type: TypeEpic, Status: StatusOpen, DependsOn: []string{"TASK-22222"},
+	}
+	assert.Error(t, task.Validate())
+	assert.Contains(t, task.Validate().Error(), "epic-type tasks cannot have dependencies")
 }
 
 func TestTask_Validate_SelfDependency(t *testing.T) {
 	task := &Task{
 		ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE",
-		Status: StatusOpen, DependsOn: []string{"TASK-ABCDE"},
+		Type: TypeTask, Status: StatusOpen, DependsOn: []string{"TASK-ABCDE"},
 	}
 	assert.Error(t, task.Validate())
 }
@@ -44,7 +63,7 @@ func TestTask_Validate_SelfDependency(t *testing.T) {
 func TestTask_Validate_DuplicateDeps(t *testing.T) {
 	task := &Task{
 		ID: "TASK-ABCDE", Title: "Test", Project: "PROJ-ABCDE",
-		Status: StatusOpen, DependsOn: []string{"TASK-22222", "TASK-22222"},
+		Type: TypeTask, Status: StatusOpen, DependsOn: []string{"TASK-22222", "TASK-22222"},
 	}
 	assert.Error(t, task.Validate())
 }

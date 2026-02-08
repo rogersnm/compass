@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var validPattern = regexp.MustCompile(`^(PROJ|DOC|EPIC|TASK)-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$`)
+var validPattern = regexp.MustCompile(`^(PROJ|DOC|TASK)-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$`)
 
 func TestNew_Format(t *testing.T) {
 	for _, et := range allTypes {
@@ -26,7 +26,6 @@ func TestNew_AllEntityTypes(t *testing.T) {
 	}{
 		{Project, "PROJ-"},
 		{Document, "DOC-"},
-		{Epic, "EPIC-"},
 		{Task, "TASK-"},
 	}
 	for _, tt := range tests {
@@ -74,6 +73,7 @@ func TestParse_InvalidFormat(t *testing.T) {
 		"XXX-ABCDE",
 		"proj-ABCDE",
 		"PROJ-ABCDEF", // too long
+		"EPIC-ABCDE",  // no longer valid
 	}
 	for _, id := range tests {
 		_, _, err := Parse(id)

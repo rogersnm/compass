@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/rogersnm/compass/internal/id"
@@ -105,4 +106,12 @@ func (s *Store) UpdateDocument(docID string, title, body *string) (*model.Docume
 		return nil, err
 	}
 	return &d, nil
+}
+
+func (s *Store) DeleteDocument(docID string) error {
+	path, err := s.ResolveEntityPath(docID)
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
 }

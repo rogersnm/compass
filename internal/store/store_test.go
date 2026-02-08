@@ -16,7 +16,7 @@ func TestEnsureProjectDirs(t *testing.T) {
 	s := newTestStore(t)
 	require.NoError(t, s.EnsureProjectDirs("PROJ-ABCDE"))
 
-	for _, sub := range []string{"documents", "epics", "tasks"} {
+	for _, sub := range []string{"documents", "tasks"} {
 		assert.DirExists(t, s.ProjectDir("PROJ-ABCDE")+"/"+sub)
 	}
 }
@@ -28,6 +28,7 @@ func TestWriteEntity_ReadEntity_RoundTrip(t *testing.T) {
 	task := &model.Task{
 		ID:      "TASK-ABCDE",
 		Title:   "Test Task",
+		Type:    model.TypeTask,
 		Project: "PROJ-ABCDE",
 		Status:  model.StatusOpen,
 	}
@@ -38,6 +39,7 @@ func TestWriteEntity_ReadEntity_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "TASK-ABCDE", got.ID)
 	assert.Equal(t, "Test Task", got.Title)
+	assert.Equal(t, model.TypeTask, got.Type)
 	assert.Equal(t, "some body", body)
 }
 
@@ -203,41 +205,6 @@ func TestUpdateDocument(t *testing.T) {
 	assert.Equal(t, "new body", body)
 }
 
-// --- Epic tests ---
-
-func TestCreateEpic(t *testing.T) {
-	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
-
-	e, err := s.CreateEpic("My Epic", p.ID, "")
-	require.NoError(t, err)
-	assert.NotEmpty(t, e.ID)
-	assert.Equal(t, model.StatusOpen, e.Status)
-}
-
-func TestCreateEpic_WithBody(t *testing.T) {
-	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
-
-	e, err := s.CreateEpic("Epic", p.ID, "Epic description")
-	require.NoError(t, err)
-
-	_, body, _ := s.GetEpic(e.ID)
-	assert.Equal(t, "Epic description", body)
-}
-
-func TestListEpics_FilterByProject(t *testing.T) {
-	s := newTestStore(t)
-	p1, _ := s.CreateProject("P1", "")
-	p2, _ := s.CreateProject("P2", "")
-	s.CreateEpic("E1", p1.ID, "")
-	s.CreateEpic("E2", p2.ID, "")
-
-	epics, err := s.ListEpics(p1.ID)
-	require.NoError(t, err)
-	assert.Len(t, epics, 1)
-}
-
 // --- Task tests ---
 
 func TestCreateTask_Minimal(t *testing.T) {
@@ -247,19 +214,40 @@ func TestCreateTask_Minimal(t *testing.T) {
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 	require.NoError(t, err)
 	assert.NotEmpty(t, task.ID)
+	assert.Equal(t, model.TypeTask, task.Type)
 	assert.Equal(t, model.StatusOpen, task.Status)
 	assert.Empty(t, task.Epic)
 	assert.Empty(t, task.DependsOn)
 }
 
+func TestCreateTask_EpicType(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+
+	epic, err := s.CreateTask("Auth Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+	require.NoError(t, err)
+	assert.Equal(t, model.TypeEpic, epic.Type)
+	assert.Equal(t, model.StatusOpen, epic.Status)
+}
+
 func TestCreateTask_WithEpic(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("P", "")
-	e, _ := s.CreateEpic("Epic", p.ID, "")
+	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 
-	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: e.ID})
+	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: epic.ID})
 	require.NoError(t, err)
-	assert.Equal(t, e.ID, task.Epic)
+	assert.Equal(t, epic.ID, task.Epic)
+}
+
+func TestCreateTask_EpicRefMustBeEpicType(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	regularTask, _ := s.CreateTask("Not Epic", p.ID, TaskCreateOpts{})
+
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: regularTask.ID})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not an epic-type task")
 }
 
 func TestCreateTask_WithDependencies(t *testing.T) {
@@ -270,6 +258,16 @@ func TestCreateTask_WithDependencies(t *testing.T) {
 	t2, err := s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{t1.ID}, t2.DependsOn)
+}
+
+func TestCreateTask_CannotDependOnEpic(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{DependsOn: []string{epic.ID}})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot depend on epic-type task")
 }
 
 func TestCreateTask_WithBody(t *testing.T) {
@@ -287,7 +285,7 @@ func TestCreateTask_InvalidEpic(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("P", "")
 
-	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: "EPIC-ZZZZZ"})
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: "TASK-ZZZZZ"})
 	assert.Error(t, err)
 }
 
@@ -327,13 +325,52 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 func TestListTasks_FilterByEpic(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("P", "")
-	e, _ := s.CreateEpic("Epic", p.ID, "")
-	s.CreateTask("T1", p.ID, TaskCreateOpts{Epic: e.ID})
+	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+	s.CreateTask("T1", p.ID, TaskCreateOpts{Epic: epic.ID})
 	s.CreateTask("T2", p.ID, TaskCreateOpts{})
 
-	tasks, err := s.ListTasks(TaskFilter{EpicID: e.ID})
+	tasks, err := s.ListTasks(TaskFilter{EpicID: epic.ID})
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
+}
+
+func TestListTasks_FilterByType(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	s.CreateTask("T1", p.ID, TaskCreateOpts{})
+	s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+
+	tasks, err := s.ListTasks(TaskFilter{Type: model.TypeTask})
+	require.NoError(t, err)
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "T1", tasks[0].Title)
+}
+
+func TestUpdateTask_Title(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Old Title", p.ID, TaskCreateOpts{})
+
+	newTitle := "New Title"
+	updated, err := s.UpdateTask(task.ID, TaskUpdate{Title: &newTitle})
+	require.NoError(t, err)
+	assert.Equal(t, "New Title", updated.Title)
+
+	got, _, _ := s.GetTask(task.ID)
+	assert.Equal(t, "New Title", got.Title)
+}
+
+func TestUpdateTask_Body(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{Body: "old body"})
+
+	newBody := "new body"
+	_, err := s.UpdateTask(task.ID, TaskUpdate{Body: &newBody})
+	require.NoError(t, err)
+
+	_, body, _ := s.GetTask(task.ID)
+	assert.Equal(t, "new body", body)
 }
 
 func TestUpdateTask_Status(t *testing.T) {
@@ -370,12 +407,125 @@ func TestAllTaskMap(t *testing.T) {
 	assert.Contains(t, m, t2.ID)
 }
 
+// --- Ready tests ---
+
+func TestReadyTasks_NoTasks(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Empty(t, ready)
+}
+
+func TestReadyTasks_AllReady(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	s.CreateTask("T1", p.ID, TaskCreateOpts{})
+	s.CreateTask("T2", p.ID, TaskCreateOpts{})
+
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Len(t, ready, 2)
+}
+
+func TestReadyTasks_BlockedExcluded(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
+	s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
+
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Len(t, ready, 1)
+	assert.Equal(t, t1.ID, ready[0].ID)
+}
+
+func TestReadyTasks_ClosedExcluded(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
+	closed := model.StatusClosed
+	s.UpdateTask(t1.ID, TaskUpdate{Status: &closed})
+
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Empty(t, ready)
+}
+
+func TestReadyTasks_EpicsExcluded(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+	s.CreateTask("Task", p.ID, TaskCreateOpts{})
+
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Len(t, ready, 1)
+	assert.Equal(t, "Task", ready[0].Title)
+}
+
+func TestReadyTasks_UnblocksAfterClose(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
+	t2, _ := s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
+
+	// Before closing t1, only t1 is ready
+	ready, err := s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Len(t, ready, 1)
+
+	// Close t1, t2 becomes ready
+	closed := model.StatusClosed
+	s.UpdateTask(t1.ID, TaskUpdate{Status: &closed})
+
+	ready, err = s.ReadyTasks(p.ID)
+	require.NoError(t, err)
+	assert.Len(t, ready, 1)
+	assert.Equal(t, t2.ID, ready[0].ID)
+}
+
+// --- Delete tests ---
+
+func TestDeleteTask(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
+
+	require.NoError(t, s.DeleteTask(task.ID))
+
+	_, _, err := s.GetTask(task.ID)
+	assert.Error(t, err)
+}
+
+func TestDeleteTask_NotFound(t *testing.T) {
+	s := newTestStore(t)
+	assert.Error(t, s.DeleteTask("TASK-ZZZZZ"))
+}
+
+func TestDeleteDocument(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	d, _ := s.CreateDocument("Doc", p.ID, "body")
+
+	require.NoError(t, s.DeleteDocument(d.ID))
+
+	_, _, err := s.GetDocument(d.ID)
+	assert.Error(t, err)
+}
+
+func TestDeleteDocument_NotFound(t *testing.T) {
+	s := newTestStore(t)
+	assert.Error(t, s.DeleteDocument("DOC-ZZZZZ"))
+}
+
 // --- Search tests ---
 
 func TestSearch_MatchTitle(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Authentication Service", "")
-	s.CreateEpic("Auth Epic", p.ID, "")
+	s.CreateTask("Auth Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	s.CreateTask("Login Form", p.ID, TaskCreateOpts{})
 
 	results, err := s.Search("auth", "")
@@ -409,4 +559,149 @@ func TestSearch_NoResults(t *testing.T) {
 	results, err := s.Search("nonexistent", "")
 	require.NoError(t, err)
 	assert.Empty(t, results)
+}
+
+// --- Checkout/Checkin tests ---
+
+func TestCheckoutEntity_Task(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("My Task", p.ID, TaskCreateOpts{Body: "task body"})
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	require.NoError(t, err)
+	assert.FileExists(t, localPath)
+	assert.Contains(t, localPath, task.ID+".md")
+
+	// Verify contents match
+	got, body, err := ReadEntity[model.Task](localPath)
+	require.NoError(t, err)
+	assert.Equal(t, task.ID, got.ID)
+	assert.Equal(t, "My Task", got.Title)
+	assert.Equal(t, "task body", body)
+}
+
+func TestCheckoutEntity_Document(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	require.NoError(t, err)
+	assert.FileExists(t, localPath)
+
+	got, body, err := ReadEntity[model.Document](localPath)
+	require.NoError(t, err)
+	assert.Equal(t, doc.ID, got.ID)
+	assert.Equal(t, "doc body", body)
+}
+
+func TestCheckoutEntity_NotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.CheckoutEntity("TASK-ZZZZZ", t.TempDir())
+	assert.Error(t, err)
+}
+
+func TestCheckinTask_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Original", p.ID, TaskCreateOpts{Body: "old body"})
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	require.NoError(t, err)
+
+	// Modify the local file: change the body
+	modified, _, err := ReadEntity[model.Task](localPath)
+	require.NoError(t, err)
+	require.NoError(t, s.WriteEntity(localPath, &modified, "new body"))
+
+	// Checkin
+	result, err := s.CheckinTask(localPath)
+	require.NoError(t, err)
+	assert.Equal(t, task.ID, result.ID)
+
+	// Local file should be removed
+	assert.NoFileExists(t, localPath)
+
+	// Store should have the updated body
+	_, body, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "new body", body)
+}
+
+func TestCheckinDocument_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	doc, _ := s.CreateDocument("Original", p.ID, "old body")
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	require.NoError(t, err)
+
+	// Modify the local file
+	modified, _, err := ReadEntity[model.Document](localPath)
+	require.NoError(t, err)
+	modified.Title = "Updated Title"
+	require.NoError(t, s.WriteEntity(localPath, &modified, "new body"))
+
+	// Checkin
+	result, err := s.CheckinDocument(localPath)
+	require.NoError(t, err)
+	assert.Equal(t, doc.ID, result.ID)
+
+	// Local file should be removed
+	assert.NoFileExists(t, localPath)
+
+	// Store should have updates
+	got, body, err := s.GetDocument(doc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Title", got.Title)
+	assert.Equal(t, "new body", body)
+}
+
+func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	require.NoError(t, err)
+
+	// Corrupt the file: clear the title to trigger validation error
+	modified, body, err := ReadEntity[model.Task](localPath)
+	require.NoError(t, err)
+	modified.Title = ""
+	require.NoError(t, s.WriteEntity(localPath, &modified, body))
+
+	_, err = s.CheckinTask(localPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "title")
+
+	// Local file should NOT be removed on error
+	assert.FileExists(t, localPath)
+}
+
+func TestCheckinDocument_InvalidFrontmatter(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	doc, _ := s.CreateDocument("Doc", p.ID, "body")
+
+	destDir := t.TempDir()
+	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	require.NoError(t, err)
+
+	// Clear the title
+	modified, body, err := ReadEntity[model.Document](localPath)
+	require.NoError(t, err)
+	modified.Title = ""
+	require.NoError(t, s.WriteEntity(localPath, &modified, body))
+
+	_, err = s.CheckinDocument(localPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "title")
+	assert.FileExists(t, localPath)
 }

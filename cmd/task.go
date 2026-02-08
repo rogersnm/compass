@@ -29,6 +29,7 @@ var taskCreateCmd = &cobra.Command{
 
 		epicID, _ := cmd.Flags().GetString("epic")
 		depsStr, _ := cmd.Flags().GetString("depends-on")
+		typeStr, _ := cmd.Flags().GetString("type")
 
 		var deps []string
 		if depsStr != "" {
@@ -38,6 +39,7 @@ var taskCreateCmd = &cobra.Command{
 		body := readStdin()
 
 		t, err := st.CreateTask(args[0], projectID, store.TaskCreateOpts{
+			Type:      model.TaskType(typeStr),
 			Epic:      epicID,
 			DependsOn: deps,
 			Body:      body,
@@ -57,11 +59,13 @@ var taskListCmd = &cobra.Command{
 		projectID, _ := cmd.Flags().GetString("project")
 		epicID, _ := cmd.Flags().GetString("epic")
 		statusStr, _ := cmd.Flags().GetString("status")
+		typeStr, _ := cmd.Flags().GetString("type")
 
 		filter := store.TaskFilter{
 			ProjectID: projectID,
 			EpicID:    epicID,
 			Status:    model.Status(statusStr),
+			Type:      model.TaskType(typeStr),
 		}
 
 		tasks, err := st.ListTasks(filter)
@@ -90,6 +94,7 @@ var taskShowCmd = &cobra.Command{
 
 		fields := []string{
 			markdown.RenderField("ID", t.ID),
+			markdown.RenderField("Type", string(t.Type)),
 			markdown.RenderField("Project", t.Project),
 			markdown.RenderField("Status", markdown.RenderStatus(string(t.Status), blocked)),
 			markdown.RenderField("Created by", t.CreatedBy),
@@ -125,6 +130,19 @@ var taskShowCmd = &cobra.Command{
 			}
 			fmt.Print(rendered)
 		}
+
+		// If epic-type, list child tasks
+		if t.Type == model.TypeEpic {
+			children, err := st.ListTasks(store.TaskFilter{EpicID: t.ID})
+			if err != nil {
+				return err
+			}
+			if len(children) > 0 {
+				fmt.Println("\nTasks:")
+				fmt.Println(markdown.RenderTaskTable(children, allTasks))
+			}
+		}
+
 		return nil
 	},
 }
@@ -136,6 +154,10 @@ var taskUpdateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		upd := store.TaskUpdate{}
 
+		if cmd.Flags().Changed("title") {
+			title, _ := cmd.Flags().GetString("title")
+			upd.Title = &title
+		}
 		if cmd.Flags().Changed("status") {
 			statusStr, _ := cmd.Flags().GetString("status")
 			s := model.Status(statusStr)
@@ -150,8 +172,13 @@ var taskUpdateCmd = &cobra.Command{
 			upd.DependsOn = &deps
 		}
 
-		if upd.Status == nil && upd.DependsOn == nil {
-			return fmt.Errorf("at least one update flag is required (--status, --depends-on)")
+		body := readStdin()
+		if body != "" {
+			upd.Body = &body
+		}
+
+		if upd.Title == nil && upd.Status == nil && upd.DependsOn == nil && upd.Body == nil {
+			return fmt.Errorf("at least one update flag or piped body is required (--title, --status, --depends-on, stdin)")
 		}
 
 		t, err := st.UpdateTask(args[0], upd)
@@ -185,7 +212,7 @@ var taskGraphCmd = &cobra.Command{
 			return err
 		}
 
-		tasks, err := st.ListTasks(store.TaskFilter{ProjectID: projectID})
+		tasks, err := st.ListTasks(store.TaskFilter{ProjectID: projectID, Type: model.TypeTask})
 		if err != nil {
 			return err
 		}
@@ -201,19 +228,141 @@ var taskGraphCmd = &cobra.Command{
 	},
 }
 
+var taskStartCmd = &cobra.Command{
+	Use:   "start <id>",
+	Short: "Start a task (set status to in_progress)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s := model.StatusInProgress
+		t, err := st.UpdateTask(args[0], store.TaskUpdate{Status: &s})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Started task %s\n", t.ID)
+		return nil
+	},
+}
+
+var taskCloseCmd = &cobra.Command{
+	Use:   "close <id>",
+	Short: "Close a task (set status to closed)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s := model.StatusClosed
+		t, err := st.UpdateTask(args[0], store.TaskUpdate{Status: &s})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Closed task %s\n", t.ID)
+		return nil
+	},
+}
+
+var taskDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Delete a task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		t, _, err := st.GetTask(args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Task: %s (%s)\n", t.Title, t.ID)
+		if err := confirmDelete(cmd, t.ID); err != nil {
+			return err
+		}
+		if err := st.DeleteTask(t.ID); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted task %s\n", t.ID)
+		return nil
+	},
+}
+
+var taskReadyCmd = &cobra.Command{
+	Use:   "ready",
+	Short: "Show next ready task(s)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		projectID, err := resolveProject(cmd)
+		if err != nil {
+			return err
+		}
+
+		ready, err := st.ReadyTasks(projectID)
+		if err != nil {
+			return err
+		}
+
+		if len(ready) == 0 {
+			fmt.Println("No ready tasks.")
+			return nil
+		}
+
+		showAll, _ := cmd.Flags().GetBool("all")
+		if showAll {
+			tasks := make([]model.Task, len(ready))
+			for i, t := range ready {
+				tasks[i] = *t
+			}
+			allTasks, _ := st.AllTaskMap(projectID)
+			fmt.Println(markdown.RenderTaskTable(tasks, allTasks))
+		} else {
+			fmt.Printf("%s  %s\n", ready[0].ID, ready[0].Title)
+		}
+		return nil
+	},
+}
+
+var taskCheckoutCmd = &cobra.Command{
+	Use:   "checkout <id>",
+	Short: "Copy a task to .compass/ in the current directory for local editing",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path, err := st.CheckoutEntity(args[0], ".compass")
+		if err != nil {
+			return err
+		}
+		fmt.Println(path)
+		return nil
+	},
+}
+
+var taskCheckinCmd = &cobra.Command{
+	Use:   "checkin <id>",
+	Short: "Write a locally edited task back to the store and remove the local copy",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		localPath := fmt.Sprintf(".compass/%s.md", args[0])
+		t, err := st.CheckinTask(localPath)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Checked in task %s\n", t.ID)
+		return nil
+	},
+}
+
 func init() {
 	taskCreateCmd.Flags().StringP("project", "p", "", "project ID")
-	taskCreateCmd.Flags().StringP("epic", "e", "", "epic ID")
+	taskCreateCmd.Flags().StringP("epic", "e", "", "epic ID (must reference a type=epic task)")
+	taskCreateCmd.Flags().StringP("type", "t", "task", "task type (task, epic)")
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
 
 	taskListCmd.Flags().StringP("project", "p", "", "filter by project")
 	taskListCmd.Flags().StringP("epic", "e", "", "filter by epic")
 	taskListCmd.Flags().StringP("status", "s", "", "filter by status (open, in_progress, closed)")
+	taskListCmd.Flags().StringP("type", "t", "", "filter by type (task, epic)")
 
+	taskUpdateCmd.Flags().String("title", "", "new title")
 	taskUpdateCmd.Flags().StringP("status", "s", "", "new status (open, in_progress, closed)")
 	taskUpdateCmd.Flags().String("depends-on", "", "comma-separated task IDs (replaces existing)")
 
 	taskGraphCmd.Flags().StringP("project", "p", "", "project ID")
+
+	taskReadyCmd.Flags().StringP("project", "p", "", "project ID")
+	taskReadyCmd.Flags().BoolP("all", "a", false, "show all ready tasks")
+
+	taskDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
 
 	taskCmd.AddCommand(taskCreateCmd)
 	taskCmd.AddCommand(taskListCmd)
@@ -221,5 +370,11 @@ func init() {
 	taskCmd.AddCommand(taskUpdateCmd)
 	taskCmd.AddCommand(taskEditCmd)
 	taskCmd.AddCommand(taskGraphCmd)
+	taskCmd.AddCommand(taskStartCmd)
+	taskCmd.AddCommand(taskCloseCmd)
+	taskCmd.AddCommand(taskDeleteCmd)
+	taskCmd.AddCommand(taskReadyCmd)
+	taskCmd.AddCommand(taskCheckoutCmd)
+	taskCmd.AddCommand(taskCheckinCmd)
 	rootCmd.AddCommand(taskCmd)
 }

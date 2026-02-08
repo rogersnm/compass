@@ -78,6 +78,57 @@ var docShowCmd = &cobra.Command{
 	},
 }
 
+var docUpdateCmd = &cobra.Command{
+	Use:   "update <id>",
+	Short: "Update a document",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var titlePtr, bodyPtr *string
+
+		if cmd.Flags().Changed("title") {
+			title, _ := cmd.Flags().GetString("title")
+			titlePtr = &title
+		}
+
+		body := readStdin()
+		if body != "" {
+			bodyPtr = &body
+		}
+
+		if titlePtr == nil && bodyPtr == nil {
+			return fmt.Errorf("at least one update is required (--title, stdin)")
+		}
+
+		d, err := st.UpdateDocument(args[0], titlePtr, bodyPtr)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Updated document %s\n", d.ID)
+		return nil
+	},
+}
+
+var docDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "Delete a document",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		d, _, err := st.GetDocument(args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Document: %s (%s)\n", d.Title, d.ID)
+		if err := confirmDelete(cmd, d.ID); err != nil {
+			return err
+		}
+		if err := st.DeleteDocument(d.ID); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted document %s\n", d.ID)
+		return nil
+	},
+}
+
 var docEditCmd = &cobra.Command{
 	Use:   "edit <id>",
 	Short: "Edit a document in $EDITOR",
@@ -91,14 +142,66 @@ var docEditCmd = &cobra.Command{
 	},
 }
 
+var docCheckoutCmd = &cobra.Command{
+	Use:   "checkout <id>",
+	Short: "Copy a document to .compass/ in the current directory for local editing",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path, err := st.CheckoutEntity(args[0], ".compass")
+		if err != nil {
+			return err
+		}
+		fmt.Println(path)
+		return nil
+	},
+}
+
+var docCheckinCmd = &cobra.Command{
+	Use:   "checkin <id>",
+	Short: "Write a locally edited document back to the store and remove the local copy",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		localPath := fmt.Sprintf(".compass/%s.md", args[0])
+		d, err := st.CheckinDocument(localPath)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Checked in document %s\n", d.ID)
+		return nil
+	},
+}
+
 func init() {
 	docCreateCmd.Flags().StringP("project", "p", "", "project ID")
 	docListCmd.Flags().StringP("project", "p", "", "filter by project")
+	docUpdateCmd.Flags().String("title", "", "new title")
+	docDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
+
 	docCmd.AddCommand(docCreateCmd)
 	docCmd.AddCommand(docListCmd)
 	docCmd.AddCommand(docShowCmd)
+	docCmd.AddCommand(docUpdateCmd)
+	docCmd.AddCommand(docDeleteCmd)
 	docCmd.AddCommand(docEditCmd)
+	docCmd.AddCommand(docCheckoutCmd)
+	docCmd.AddCommand(docCheckinCmd)
 	rootCmd.AddCommand(docCmd)
+}
+
+// confirmDelete prompts the user to type the entity ID to confirm deletion.
+// Returns nil if confirmed, error otherwise. Skipped with --force.
+func confirmDelete(cmd *cobra.Command, entityID string) error {
+	force, _ := cmd.Flags().GetBool("force")
+	if force {
+		return nil
+	}
+	fmt.Printf("Type %s to confirm deletion: ", entityID)
+	var input string
+	_, err := fmt.Scanln(&input)
+	if err != nil || input != entityID {
+		return fmt.Errorf("deletion cancelled")
+	}
+	return nil
 }
 
 func readStdin() string {
