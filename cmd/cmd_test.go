@@ -18,8 +18,8 @@ func setupEnv(t *testing.T) (store.Store, string) {
 	dir := t.TempDir()
 	dataDir = dir
 	st = store.NewLocal(dir)
-	cfg = &config.Config{}
-	t.Setenv("COMPASS_LOCAL", "true")
+	cfg = &config.Config{Mode: "local"}
+	require.NoError(t, config.Save(dir, cfg))
 	return st, dir
 }
 
@@ -88,7 +88,7 @@ func TestDocCreate_WithProject(t *testing.T) {
 func TestDocCreate_DefaultProject(t *testing.T) {
 	s, dir := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{DefaultProject: p.ID}
+	cfg = &config.Config{Mode: "local", DefaultProject: p.ID}
 	config.Save(dir, cfg)
 
 	// Must explicitly pass --project "" to clear any leftover flag from prior test
@@ -265,7 +265,7 @@ func TestProjectDelete_Force(t *testing.T) {
 func TestProjectDelete_ClearsDefault(t *testing.T) {
 	s, dir := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{DefaultProject: p.ID}
+	cfg = &config.Config{Mode: "local", DefaultProject: p.ID}
 	config.Save(dir, cfg)
 
 	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))

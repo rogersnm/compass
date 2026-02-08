@@ -392,8 +392,6 @@ func setupCloudEnv(t *testing.T) *fakeAPI {
 
 	// Point CloudStore at the fake server
 	t.Setenv("COMPASS_API_BASE", srv.URL)
-	// Ensure COMPASS_LOCAL is NOT set
-	t.Setenv("COMPASS_LOCAL", "")
 
 	return api
 }
@@ -404,10 +402,8 @@ func TestCloudRouting_PromptWhenNoConfig(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
 	cfg = &config.Config{}
-	t.Setenv("COMPASS_LOCAL", "")
-	t.Setenv("COMPASS_API_BASE", "")
 
-	// Save empty config (no cloud section)
+	// Save empty config (no cloud section, no mode)
 	require.NoError(t, config.Save(dir, cfg))
 
 	// Non-interactive stdin falls through to default error
@@ -416,11 +412,10 @@ func TestCloudRouting_PromptWhenNoConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "compass auth login")
 }
 
-func TestCloudRouting_LocalOverride(t *testing.T) {
+func TestCloudRouting_LocalMode(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
-	cfg = &config.Config{}
-	t.Setenv("COMPASS_LOCAL", "true")
+	cfg = &config.Config{Mode: "local"}
 
 	require.NoError(t, config.Save(dir, cfg))
 

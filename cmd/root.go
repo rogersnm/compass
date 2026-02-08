@@ -43,7 +43,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		if os.Getenv("COMPASS_LOCAL") == "true" {
+		if cfg.Mode == "local" {
 			st = store.NewLocal(dataDir)
 		} else if cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
 			st = store.NewCloudStore(cfg.Cloud.APIKey)
@@ -231,6 +231,7 @@ func promptSetup(cmd *cobra.Command) error {
 		Options(
 			huh.NewOption("Log in to Compass Cloud", "login"),
 			huh.NewOption("Create an account at "+signupURL, "signup"),
+			huh.NewOption("Use local mode (offline, file-based)", "local"),
 		).
 		Value(&choice).
 		Run()
@@ -246,6 +247,14 @@ func promptSetup(cmd *cobra.Command) error {
 		openBrowser(signupURL)
 		fmt.Println("Opening browser... after signing up, run: compass auth login")
 		return fmt.Errorf("setup incomplete")
+	case "local":
+		cfg.Mode = "local"
+		if err := config.Save(dataDir, cfg); err != nil {
+			return fmt.Errorf("saving config: %w", err)
+		}
+		st = store.NewLocal(dataDir)
+		fmt.Println("Local mode enabled. Data will be stored in " + dataDir)
+		return nil
 	default:
 		return fmt.Errorf("run 'compass auth login' to get started")
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	Mode           string       `yaml:"mode,omitempty"` // "local" or "" (cloud is default)
 	DefaultProject string       `yaml:"default_project,omitempty"`
 	Cloud          *CloudConfig `yaml:"cloud,omitempty"`
 }
