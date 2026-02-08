@@ -301,6 +301,13 @@ var configLoginCmd = &cobra.Command{
 		if verifyURL != "" && verifyURL[0] == '/' {
 			verifyURL = server + verifyURL
 		}
+		if d.UserCode != "" {
+			if strings.Contains(verifyURL, "?") {
+				verifyURL += "&user_code=" + d.UserCode
+			} else {
+				verifyURL += "?user_code=" + d.UserCode
+			}
+		}
 
 		fmt.Printf("Open this URL in your browser:\n  %s\n\n", verifyURL)
 		fmt.Printf("Enter code: %s\n\n", d.UserCode)
