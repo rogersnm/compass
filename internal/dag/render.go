@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	openStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))  // white
+	openStyle       = lipgloss.NewStyle()
 	inProgressStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
 	closedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
 	blockedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))  // red
