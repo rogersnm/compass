@@ -1,6 +1,8 @@
 package markdown
 
 import (
+	"sort"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/rogersnm/compass/internal/model"
@@ -37,12 +39,20 @@ func RenderTaskTable(tasks []model.Task, allTasks map[string]*model.Task) string
 	if len(tasks) == 0 {
 		return "No tasks found."
 	}
+	sort.Slice(tasks, func(i, j int) bool {
+		bi := tasks[i].IsBlocked(allTasks)
+		bj := tasks[j].IsBlocked(allTasks)
+		if bi != bj {
+			return !bi // unblocked first
+		}
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
 	rows := make([][]string, len(tasks))
 	for i, t := range tasks {
 		status := RenderStatus(string(t.Status), t.IsBlocked(allTasks))
-		rows[i] = []string{t.ID, t.Title, model.FormatPriority(t.Priority), status, t.Project}
+		rows[i] = []string{t.ID, t.Title, string(t.Type), model.FormatPriority(t.Priority), status, t.Project}
 	}
-	return renderTable([]string{"ID", "Title", "Pri", "Status", "Project"}, rows)
+	return renderTable([]string{"ID", "Title", "Type", "Pri", "Status", "Project"}, rows)
 }
 
 func renderTable(headers []string, rows [][]string) string {
