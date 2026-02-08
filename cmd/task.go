@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/rogersnm/compass/internal/dag"
@@ -90,6 +91,20 @@ var taskShowCmd = &cobra.Command{
 	Short: "Show task details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		raw, _ := cmd.Flags().GetBool("raw")
+		if raw {
+			path, err := st.ResolveEntityPath(args[0])
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			fmt.Print(string(data))
+			return nil
+		}
+
 		t, body, err := st.GetTask(args[0])
 		if err != nil {
 			return err
@@ -363,6 +378,8 @@ func init() {
 	taskCreateCmd.Flags().StringP("type", "t", "task", "task type (task, epic)")
 	taskCreateCmd.Flags().IntP("priority", "p", -1, "priority (0=P0 critical, 1=P1 high, 2=P2 medium, 3=P3 low)")
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
+
+	taskShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
 
 	taskListCmd.Flags().StringP("project", "P", "", "filter by project")
 	taskListCmd.Flags().StringP("epic", "e", "", "filter by epic")
