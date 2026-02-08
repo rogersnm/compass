@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rogersnm/compass/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -29,67 +30,54 @@ func getTestAPIURL(t *testing.T) string {
 	return url
 }
 
-// setupTestUser registers a test user, creates an org, and returns an API key.
+// setupTestUser registers a user+org in one call, creates an API key, and returns it.
 func setupTestUser(t *testing.T, apiURL string) string {
 	t.Helper()
 
-	unique := fmt.Sprintf("test-%d", os.Getpid())
+	unique := fmt.Sprintf("test-%d-%d", os.Getpid(), time.Now().UnixNano())
 	email := unique + "@test.com"
+	orgSlug := "org-" + unique
 
-	// Register
+	// Register with org
 	regBody, _ := json.Marshal(map[string]string{
 		"email":    email,
 		"password": "testpassword123",
 		"name":     "Test User",
+		"org_name": "Test Org",
+		"org_slug": orgSlug,
 	})
 	resp, err := http.Post(apiURL+"/api/v1/auth/register", "application/json", bytes.NewReader(regBody))
 	require.NoError(t, err)
-	resp.Body.Close()
-
-	// Login
-	loginBody, _ := json.Marshal(map[string]string{
-		"email":    email,
-		"password": "testpassword123",
-	})
-	resp, err = http.Post(apiURL+"/api/v1/auth/login", "application/json", bytes.NewReader(loginBody))
-	require.NoError(t, err)
 	defer resp.Body.Close()
+	require.Equal(t, 201, resp.StatusCode, "register should return 201")
 
-	var loginResp struct {
+	var regResp struct {
 		Data struct {
 			AccessToken string `json:"access_token"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&loginResp))
-	token := loginResp.Data.AccessToken
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&regResp))
+	token := regResp.Data.AccessToken
+	require.NotEmpty(t, token, "register should return an access token")
 
-	// Create org
-	orgBody, _ := json.Marshal(map[string]string{
-		"name": "Test Org " + unique,
-		"slug": "test-org-" + unique,
-	})
-	req, _ := http.NewRequest("POST", apiURL+"/api/v1/orgs", bytes.NewReader(orgBody))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	resp.Body.Close()
-
-	// Create API key
+	// Create API key (JWT auth needs X-Org-Slug)
 	keyBody, _ := json.Marshal(map[string]string{"name": "test-key"})
-	req, _ = http.NewRequest("POST", apiURL+"/api/v1/auth/keys", bytes.NewReader(keyBody))
+	req, _ := http.NewRequest("POST", apiURL+"/api/v1/auth/keys", bytes.NewReader(keyBody))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Org-Slug", orgSlug)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err = http.DefaultClient.Do(req)
+	resp2, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer resp2.Body.Close()
+	require.Equal(t, 201, resp2.StatusCode, "create API key should return 201")
 
 	var keyResp struct {
 		Data struct {
 			Key string `json:"key"`
 		} `json:"data"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&keyResp))
+	require.NoError(t, json.NewDecoder(resp2.Body).Decode(&keyResp))
+	require.NotEmpty(t, keyResp.Data.Key, "API key should not be empty")
 	return keyResp.Data.Key
 }
 
