@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rogersnm/compass/internal/config"
+	"github.com/rogersnm/compass/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -22,10 +23,10 @@ var authLoginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with compass cloud via device flow",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		server, _ := cmd.Flags().GetString("server")
+		server := store.CloudAPIBase
 
 		// Step 1: Request device code
-		resp, err := http.Post(server+"/api/v1/auth/device", "application/json", nil)
+		resp, err := http.Post(server+"/auth/device", "application/json", nil)
 		if err != nil {
 			return fmt.Errorf("requesting device code: %w", err)
 		}
@@ -82,7 +83,6 @@ var authLoginCmd = &cobra.Command{
 
 			if tokenResp.Status == "authorized" {
 				cfg.Cloud = &config.CloudConfig{
-					APIURL: server,
 					APIKey: tokenResp.APIKey,
 				}
 				if err := config.Save(dataDir, cfg); err != nil {
@@ -113,7 +113,7 @@ type tokenResult struct {
 func pollToken(server, deviceCode string) (*tokenResult, error) {
 	body := fmt.Sprintf(`{"device_code":"%s"}`, deviceCode)
 	resp, err := http.Post(
-		server+"/api/v1/auth/device/token",
+		server+"/auth/device/token",
 		"application/json",
 		strings.NewReader(body),
 	)
@@ -190,16 +190,13 @@ var authStatusCmd = &cobra.Command{
 			fmt.Println("Not authenticated (local mode)")
 			return nil
 		}
-		fmt.Printf("Authenticated to %s\n", cfg.Cloud.APIURL)
+		fmt.Printf("Authenticated to %s\n", store.CloudAPIBase)
 		fmt.Printf("API key: %s...\n", cfg.Cloud.APIKey[:min(8, len(cfg.Cloud.APIKey))])
 		return nil
 	},
 }
 
 func init() {
-	authLoginCmd.Flags().String("server", "", "compass cloud server URL")
-	authLoginCmd.MarkFlagRequired("server")
-
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authLogoutCmd)
 	authCmd.AddCommand(authStatusCmd)

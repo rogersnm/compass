@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/huh"
 	"github.com/rogersnm/compass/internal/repofile"
 	"github.com/spf13/cobra"
 )
@@ -29,12 +30,16 @@ var repoInitCmd = &cobra.Command{
 			if len(projects) == 0 {
 				return fmt.Errorf("no projects exist; create one first with: compass project create <name>")
 			}
-			for _, p := range projects {
-				fmt.Printf("  %s  %s\n", p.ID, p.Name)
+			opts := make([]huh.Option[string], len(projects))
+			for i, p := range projects {
+				opts[i] = huh.NewOption(fmt.Sprintf("%s  %s", p.ID, p.Name), p.ID)
 			}
-			fmt.Print("Project ID: ")
-			if _, err := fmt.Scanln(&projectID); err != nil {
-				return fmt.Errorf("reading input: %w", err)
+			if err := huh.NewSelect[string]().
+				Title("Select a project").
+				Options(opts...).
+				Value(&projectID).
+				Run(); err != nil {
+				return fmt.Errorf("selection cancelled")
 			}
 		}
 

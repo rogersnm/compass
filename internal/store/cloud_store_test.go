@@ -13,7 +13,7 @@ import (
 
 func newTestCloudStore(handler http.HandlerFunc) (*CloudStore, *httptest.Server) {
 	srv := httptest.NewServer(handler)
-	cs := NewCloudStore(srv.URL, "test-api-key")
+	cs := NewCloudStoreWithBase(srv.URL, "test-api-key")
 	return cs, srv
 }
 
@@ -26,7 +26,7 @@ func jsonResponse(w http.ResponseWriter, status int, body any) {
 func TestCloudStore_CreateProject(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/projects", r.URL.Path)
+		assert.Equal(t, "/projects", r.URL.Path)
 		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
 
 		var body map[string]string
@@ -55,7 +55,7 @@ func TestCloudStore_CreateProject(t *testing.T) {
 func TestCloudStore_GetProject(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "/api/v1/projects/MP", r.URL.Path)
+		assert.Equal(t, "/projects/MP", r.URL.Path)
 
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
@@ -96,7 +96,7 @@ func TestCloudStore_ListProjects(t *testing.T) {
 func TestCloudStore_DeleteProject(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
-		assert.Equal(t, "/api/v1/projects/MP", r.URL.Path)
+		assert.Equal(t, "/projects/MP", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{"data": map[string]any{"message": "Project deleted"}})
 	})
 	defer srv.Close()
@@ -108,7 +108,7 @@ func TestCloudStore_DeleteProject(t *testing.T) {
 func TestCloudStore_CreateTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/projects/MP/tasks", r.URL.Path)
+		assert.Equal(t, "/projects/MP/tasks", r.URL.Path)
 
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
@@ -137,7 +137,7 @@ func TestCloudStore_CreateTask(t *testing.T) {
 
 func TestCloudStore_GetTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/tasks/MP-TABCDE", r.URL.Path)
+		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
@@ -162,7 +162,7 @@ func TestCloudStore_GetTask(t *testing.T) {
 func TestCloudStore_UpdateTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "PATCH", r.Method)
-		assert.Equal(t, "/api/v1/tasks/MP-TABCDE", r.URL.Path)
+		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
@@ -191,7 +191,7 @@ func TestCloudStore_UpdateTask(t *testing.T) {
 func TestCloudStore_DeleteTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "DELETE", r.Method)
-		assert.Equal(t, "/api/v1/tasks/MP-TABCDE", r.URL.Path)
+		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{"data": map[string]any{"message": "Task deleted"}})
 	})
 	defer srv.Close()
@@ -202,7 +202,7 @@ func TestCloudStore_DeleteTask(t *testing.T) {
 
 func TestCloudStore_ListTasks(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
-		assert.Contains(t, r.URL.Path, "/api/v1/projects/MP/tasks")
+		assert.Contains(t, r.URL.Path, "/projects/MP/tasks")
 		jsonResponse(w, 200, map[string]any{
 			"data": []map[string]any{
 				{"task_id": "uuid-1", "display_id": "MP-T00001", "title": "T1", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
@@ -220,7 +220,7 @@ func TestCloudStore_ListTasks(t *testing.T) {
 
 func TestCloudStore_ReadyTasks(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/projects/MP/tasks/ready", r.URL.Path)
+		assert.Equal(t, "/projects/MP/tasks/ready", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
 			"data": []map[string]any{
 				{"task_id": "uuid-1", "display_id": "MP-T00001", "title": "Ready Task", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
@@ -238,7 +238,7 @@ func TestCloudStore_ReadyTasks(t *testing.T) {
 func TestCloudStore_CreateDocument(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/api/v1/projects/MP/documents", r.URL.Path)
+		assert.Equal(t, "/projects/MP/documents", r.URL.Path)
 
 		jsonResponse(w, 201, map[string]any{
 			"data": map[string]any{
@@ -293,7 +293,7 @@ func TestCloudStore_APIError(t *testing.T) {
 
 func TestCloudStore_CheckoutTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/tasks/MP-TABCDE", r.URL.Path)
+		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-task",
@@ -324,7 +324,7 @@ func TestCloudStore_CheckoutTask(t *testing.T) {
 
 func TestCloudStore_CheckoutDocument(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/documents/MP-DABCDE", r.URL.Path)
+		assert.Equal(t, "/documents/MP-DABCDE", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"document_id": "uuid-doc",
@@ -392,7 +392,7 @@ func TestCloudStore_CheckinTask(t *testing.T) {
 }
 
 func TestCloudStore_ResolveEntityPath_Unsupported(t *testing.T) {
-	cs := NewCloudStore("http://localhost", "key")
+	cs := NewCloudStoreWithBase("http://localhost", "key")
 	_, err := cs.ResolveEntityPath("MP-TABCDE")
 	assert.Error(t, err)
 }

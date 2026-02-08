@@ -15,7 +15,6 @@ type Config struct {
 }
 
 type CloudConfig struct {
-	APIURL string `yaml:"api_url"`
 	APIKey string `yaml:"api_key"`
 }
 

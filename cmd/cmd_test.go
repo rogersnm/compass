@@ -19,6 +19,7 @@ func setupEnv(t *testing.T) (store.Store, string) {
 	dataDir = dir
 	st = store.NewLocal(dir)
 	cfg = &config.Config{}
+	t.Setenv("COMPASS_LOCAL", "true")
 	return st, dir
 }
 
@@ -102,7 +103,7 @@ func TestTaskCreate_Minimal(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 
-	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID))
+	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--type", "task"))
 
 	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
 	require.NoError(t, err)

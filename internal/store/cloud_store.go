@@ -16,21 +16,36 @@ import (
 	"github.com/rogersnm/compass/internal/model"
 )
 
+const CloudAPIBase = "https://compasscloud.io/api/v1"
+
 // CloudStore implements Store using the compass-cloud HTTP API.
 type CloudStore struct {
-	apiURL string
-	apiKey string
-	client *http.Client
+	apiBase string
+	apiKey  string
+	client  *http.Client
 }
 
 // compile-time check
 var _ Store = (*CloudStore)(nil)
 
-func NewCloudStore(apiURL, apiKey string) *CloudStore {
+func NewCloudStore(apiKey string) *CloudStore {
+	base := CloudAPIBase
+	if override := os.Getenv("COMPASS_API_BASE"); override != "" {
+		base = override
+	}
 	return &CloudStore{
-		apiURL: apiURL,
-		apiKey: apiKey,
-		client: &http.Client{Timeout: 30 * time.Second},
+		apiBase: base,
+		apiKey:  apiKey,
+		client:  &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+// NewCloudStoreWithBase creates a CloudStore with a custom API base URL (for testing).
+func NewCloudStoreWithBase(apiBase, apiKey string) *CloudStore {
+	return &CloudStore{
+		apiBase: apiBase,
+		apiKey:  apiKey,
+		client:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -46,7 +61,7 @@ func (cs *CloudStore) doJSON(method, path string, body any) (*http.Response, err
 		bodyReader = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequest(method, cs.apiURL+path, bodyReader)
+	req, err := http.NewRequest(method, cs.apiBase+path, bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +179,7 @@ func (cs *CloudStore) CreateProject(name, key, body string) (*model.Project, err
 	if body != "" {
 		payload["body"] = body
 	}
-	resp, err := cs.doJSON("POST", "/api/v1/projects", payload)
+	resp, err := cs.doJSON("POST", "/projects", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +191,7 @@ func (cs *CloudStore) CreateProject(name, key, body string) (*model.Project, err
 }
 
 func (cs *CloudStore) GetProject(projectID string) (*model.Project, string, error) {
-	resp, err := cs.doJSON("GET", "/api/v1/projects/"+url.PathEscape(projectID), nil)
+	resp, err := cs.doJSON("GET", "/projects/"+url.PathEscape(projectID), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -191,7 +206,7 @@ func (cs *CloudStore) ListProjects() ([]model.Project, error) {
 	var all []model.Project
 	cursor := ""
 	for {
-		path := "/api/v1/projects?limit=100"
+		path := "/projects?limit=100"
 		if cursor != "" {
 			path += "&cursor=" + url.QueryEscape(cursor)
 		}
@@ -215,7 +230,7 @@ func (cs *CloudStore) ListProjects() ([]model.Project, error) {
 }
 
 func (cs *CloudStore) DeleteProject(projectID string) error {
-	resp, err := cs.doJSON("DELETE", "/api/v1/projects/"+url.PathEscape(projectID), nil)
+	resp, err := cs.doJSON("DELETE", "/projects/"+url.PathEscape(projectID), nil)
 	if err != nil {
 		return err
 	}
@@ -245,7 +260,7 @@ func (cs *CloudStore) CreateTask(title, projectID string, opts TaskCreateOpts) (
 		payload["body"] = opts.Body
 	}
 
-	resp, err := cs.doJSON("POST", "/api/v1/projects/"+url.PathEscape(projectID)+"/tasks", payload)
+	resp, err := cs.doJSON("POST", "/projects/"+url.PathEscape(projectID)+"/tasks", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +276,7 @@ func (cs *CloudStore) CreateTask(title, projectID string, opts TaskCreateOpts) (
 }
 
 func (cs *CloudStore) GetTask(taskID string) (*model.Task, string, error) {
-	resp, err := cs.doJSON("GET", "/api/v1/tasks/"+url.PathEscape(taskID), nil)
+	resp, err := cs.doJSON("GET", "/tasks/"+url.PathEscape(taskID), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -295,7 +310,7 @@ func (cs *CloudStore) ListTasks(filter TaskFilter) ([]model.Task, error) {
 	var all []model.Task
 	cursor := ""
 	for {
-		path := "/api/v1/projects/" + url.PathEscape(filter.ProjectID) + "/tasks?limit=100"
+		path := "/projects/" + url.PathEscape(filter.ProjectID) + "/tasks?limit=100"
 		if filter.Status != "" {
 			path += "&status=" + url.QueryEscape(string(filter.Status))
 		}
@@ -344,7 +359,7 @@ func (cs *CloudStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, er
 		payload["body"] = *upd.Body
 	}
 
-	resp, err := cs.doJSON("PATCH", "/api/v1/tasks/"+url.PathEscape(taskID), payload)
+	resp, err := cs.doJSON("PATCH", "/tasks/"+url.PathEscape(taskID), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +371,7 @@ func (cs *CloudStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, er
 }
 
 func (cs *CloudStore) DeleteTask(taskID string) error {
-	resp, err := cs.doJSON("DELETE", "/api/v1/tasks/"+url.PathEscape(taskID), nil)
+	resp, err := cs.doJSON("DELETE", "/tasks/"+url.PathEscape(taskID), nil)
 	if err != nil {
 		return err
 	}
@@ -381,7 +396,7 @@ func (cs *CloudStore) AllTaskMap(projectID string) (map[string]*model.Task, erro
 
 func (cs *CloudStore) ReadyTasks(projectID string) ([]*model.Task, error) {
 	// Use the dedicated ready endpoint
-	resp, err := cs.doJSON("GET", "/api/v1/projects/"+url.PathEscape(projectID)+"/tasks/ready", nil)
+	resp, err := cs.doJSON("GET", "/projects/"+url.PathEscape(projectID)+"/tasks/ready", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +420,7 @@ func (cs *CloudStore) CreateDocument(title, projectID, body string) (*model.Docu
 	if body != "" {
 		payload["body"] = body
 	}
-	resp, err := cs.doJSON("POST", "/api/v1/projects/"+url.PathEscape(projectID)+"/documents", payload)
+	resp, err := cs.doJSON("POST", "/projects/"+url.PathEscape(projectID)+"/documents", payload)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +434,7 @@ func (cs *CloudStore) CreateDocument(title, projectID, body string) (*model.Docu
 }
 
 func (cs *CloudStore) GetDocument(docID string) (*model.Document, string, error) {
-	resp, err := cs.doJSON("GET", "/api/v1/documents/"+url.PathEscape(docID), nil)
+	resp, err := cs.doJSON("GET", "/documents/"+url.PathEscape(docID), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -450,7 +465,7 @@ func (cs *CloudStore) ListDocuments(projectID string) ([]model.Document, error) 
 	var all []model.Document
 	cursor := ""
 	for {
-		path := "/api/v1/projects/" + url.PathEscape(projectID) + "/documents?limit=100"
+		path := "/projects/" + url.PathEscape(projectID) + "/documents?limit=100"
 		if cursor != "" {
 			path += "&cursor=" + url.QueryEscape(cursor)
 		}
@@ -483,7 +498,7 @@ func (cs *CloudStore) UpdateDocument(docID string, title, body *string) (*model.
 	if body != nil {
 		payload["body"] = *body
 	}
-	resp, err := cs.doJSON("PATCH", "/api/v1/documents/"+url.PathEscape(docID), payload)
+	resp, err := cs.doJSON("PATCH", "/documents/"+url.PathEscape(docID), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +510,7 @@ func (cs *CloudStore) UpdateDocument(docID string, title, body *string) (*model.
 }
 
 func (cs *CloudStore) DeleteDocument(docID string) error {
-	resp, err := cs.doJSON("DELETE", "/api/v1/documents/"+url.PathEscape(docID), nil)
+	resp, err := cs.doJSON("DELETE", "/documents/"+url.PathEscape(docID), nil)
 	if err != nil {
 		return err
 	}
@@ -509,7 +524,7 @@ func (cs *CloudStore) DeleteDocument(docID string) error {
 // --- Search ---
 
 func (cs *CloudStore) Search(query, projectID string) ([]SearchResult, error) {
-	path := "/api/v1/search?q=" + url.QueryEscape(query)
+	path := "/search?q=" + url.QueryEscape(query)
 	if projectID != "" {
 		path += "&project=" + url.QueryEscape(projectID)
 	}

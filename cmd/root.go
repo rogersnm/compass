@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/huh"
 	mtp "github.com/modeltoolsprotocol/go-sdk"
 	"github.com/rogersnm/compass/internal/config"
 	"github.com/rogersnm/compass/internal/repofile"
@@ -13,11 +14,10 @@ import (
 )
 
 var (
-	version  = "dev"
-	dataDir  string
-	forceLocal bool
-	st       store.Store
-	cfg      *config.Config
+	version = "dev"
+	dataDir string
+	st      store.Store
+	cfg     *config.Config
 )
 
 func defaultDataDir() string {
@@ -43,10 +43,12 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		if !forceLocal && cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
-			st = store.NewCloudStore(cfg.Cloud.APIURL, cfg.Cloud.APIKey)
-		} else {
+		if os.Getenv("COMPASS_LOCAL") == "true" {
 			st = store.NewLocal(dataDir)
+		} else if cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
+			st = store.NewCloudStore(cfg.Cloud.APIKey)
+		} else {
+			return promptSetup(cmd)
 		}
 		return nil
 	},
@@ -55,7 +57,6 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", defaultDataDir(), "data directory path")
-	rootCmd.PersistentFlags().BoolVar(&forceLocal, "local", false, "force local file-based storage")
 
 	mtpOpts := &mtp.DescribeOptions{
 		Commands: map[string]*mtp.CommandAnnotation{
@@ -211,6 +212,43 @@ func init() {
 
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+const signupURL = "https://compasscloud.io/signup"
+
+// promptSetup is shown on first run when no cloud config exists.
+// It lets the user log in, create an account, or bail out.
+func promptSetup(cmd *cobra.Command) error {
+	// If the user is already running "auth login", let it through
+	if cmd.Name() == "login" && cmd.Parent() != nil && cmd.Parent().Name() == "auth" {
+		st = store.NewLocal(dataDir)
+		return nil
+	}
+
+	var choice string
+	err := huh.NewSelect[string]().
+		Title("Welcome to Compass!").
+		Options(
+			huh.NewOption("Log in to Compass Cloud", "login"),
+			huh.NewOption("Create an account at "+signupURL, "signup"),
+		).
+		Value(&choice).
+		Run()
+	if err != nil {
+		return fmt.Errorf("run 'compass auth login' to get started")
+	}
+
+	switch choice {
+	case "login":
+		fmt.Println()
+		return authLoginCmd.RunE(cmd, nil)
+	case "signup":
+		openBrowser(signupURL)
+		fmt.Println("Opening browser... after signing up, run: compass auth login")
+		return fmt.Errorf("setup incomplete")
+	default:
+		return fmt.Errorf("run 'compass auth login' to get started")
+	}
 }
 
 // resolveProject returns the project ID from the flag, repo-local file, or global default.

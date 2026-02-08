@@ -84,7 +84,7 @@ func setupTestUser(t *testing.T, apiURL string) string {
 func TestIntegration_ProjectCRUD(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	// Create
 	p, err := cs.CreateProject("Integration Test", "IT", "")
@@ -114,7 +114,7 @@ func TestIntegration_ProjectCRUD(t *testing.T) {
 func TestIntegration_TaskCRUD(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	p, err := cs.CreateProject("Task Test", "TT", "")
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestIntegration_TaskCRUD(t *testing.T) {
 func TestIntegration_DocumentCRUD(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	p, err := cs.CreateProject("Doc Test", "DT", "")
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestIntegration_DocumentCRUD(t *testing.T) {
 func TestIntegration_ReadyTasks(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	p, err := cs.CreateProject("Ready Test", "RT", "")
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestIntegration_ReadyTasks(t *testing.T) {
 func TestIntegration_CheckoutCheckin(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	p, err := cs.CreateProject("Checkout Test", "CT", "")
 	require.NoError(t, err)
@@ -257,7 +257,7 @@ func TestIntegration_CheckoutCheckin(t *testing.T) {
 func TestIntegration_Search(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
-	cs := NewCloudStore(apiURL, apiKey)
+	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
 	p, err := cs.CreateProject("Search Test", "ST", "")
 	require.NoError(t, err)
