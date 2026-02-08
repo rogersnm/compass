@@ -14,7 +14,7 @@ func (s *Store) CreateDocument(title, projectID, body string) (*model.Document, 
 		return nil, fmt.Errorf("project %s not found", projectID)
 	}
 
-	did, err := id.New(id.Document)
+	did, err := id.NewDocID(projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *Store) ListDocuments(projectID string) ([]model.Document, error) {
 	var docs []model.Document
 	for _, d := range dirs {
 		docDir := filepath.Join(d, "documents")
-		files, err := s.ListFiles(docDir, "DOC-*.md")
+		files, err := s.ListFiles(docDir, "*.md")
 		if err != nil {
 			continue
 		}

@@ -18,7 +18,8 @@ var projectCreateCmd = &cobra.Command{
 	Short: "Create a new project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p, err := st.CreateProject(args[0], "")
+		key, _ := cmd.Flags().GetString("key")
+		p, err := st.CreateProject(args[0], key, "")
 		if err != nil {
 			return err
 		}
@@ -85,6 +86,7 @@ var projectSetDefaultCmd = &cobra.Command{
 }
 
 func init() {
+	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
 	projectCmd.AddCommand(projectCreateCmd)
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectShowCmd)

@@ -22,19 +22,26 @@ Compass is a markdown-native task/document tracking CLI. Data lives in `~/.compa
 
 ```
 ~/.compass/
-├── config.yaml                    # default_project
+├── config.yaml                    # default_project (stores project key)
 └── projects/
-    └── PROJ-XXXXX/
+    └── AUTH/                      # project key (2-5 uppercase alphanumeric)
         ├── project.md
-        ├── documents/DOC-XXXXX.md
-        └── tasks/TASK-XXXXX.md    # both task and epic types
+        ├── documents/AUTH-DXXXXX.md
+        └── tasks/AUTH-TXXXXX.md   # both task and epic types
 ```
 
 Each `.md` file has YAML frontmatter (parsed by `adrg/frontmatter`) followed by a markdown body. The `internal/markdown` package provides generic `Parse[T]()` and `Marshal()` for round-tripping.
 
 ### Entity model
 
-Three entity types: Project, Document, Task. Epics are tasks with `type: epic`. All IDs use the format `PREFIX-HASH` where HASH is 5 chars from charset `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (no ambiguous 0/O/1/I/L). The `internal/id` package handles generation and parsing.
+Three entity types: Project, Document, Task. Epics are tasks with `type: epic`.
+
+ID format is project-key-based:
+- **Project**: bare key (e.g. `AUTH`, `AUTH2`, `API`)
+- **Task**: `KEY-THASH` (e.g. `AUTH-TABCDE`)
+- **Document**: `KEY-DHASH` (e.g. `AUTH-DABCDE`)
+
+Keys are 2-5 uppercase alphanumeric chars. Hash is 5 chars from charset `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (no ambiguous 0/O/1/I/L). Keys are auto-generated from the project name (first 4 alpha chars, uppercased) with collision handling (AUTH, AUTH2, AUTH3...) or explicitly provided via `--key`. The `internal/id` package handles generation and parsing.
 
 Tasks have a DAG of dependencies via `depends_on`. Epic-type tasks cannot have dependencies and cannot be depended on. The `internal/dag` package validates acyclicity (DFS) and provides topological sorting (Kahn's algorithm) for the `task ready` command.
 
@@ -43,7 +50,7 @@ Tasks have a DAG of dependencies via `depends_on`. Epic-type tasks cannot have d
 ### Package responsibilities
 
 - `cmd/` - Cobra commands. Global state (`st`, `cfg`, `dataDir`) is set in `PersistentPreRunE`.
-- `internal/store/` - All file I/O. `ResolveEntityPath()` scans project dirs to find an entity by ID.
+- `internal/store/` - All file I/O. `ResolveEntityPath()` computes paths directly from the ID (no scanning).
 - `internal/model/` - Structs with `Validate()` methods. No I/O.
 - `internal/dag/` - Graph construction from `[]*model.Task`, cycle detection, topological sort, ASCII rendering.
 - `internal/markdown/` - Frontmatter parse/marshal, glamour rendering, lipgloss tables.

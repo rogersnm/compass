@@ -14,30 +14,30 @@ func newTestStore(t *testing.T) *Store {
 
 func TestEnsureProjectDirs(t *testing.T) {
 	s := newTestStore(t)
-	require.NoError(t, s.EnsureProjectDirs("PROJ-ABCDE"))
+	require.NoError(t, s.EnsureProjectDirs("TEST"))
 
 	for _, sub := range []string{"documents", "tasks"} {
-		assert.DirExists(t, s.ProjectDir("PROJ-ABCDE")+"/"+sub)
+		assert.DirExists(t, s.ProjectDir("TEST")+"/"+sub)
 	}
 }
 
 func TestWriteEntity_ReadEntity_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	require.NoError(t, s.EnsureProjectDirs("PROJ-ABCDE"))
+	require.NoError(t, s.EnsureProjectDirs("TEST"))
 
 	task := &model.Task{
-		ID:      "TASK-ABCDE",
+		ID:      "TEST-TABCDE",
 		Title:   "Test Task",
 		Type:    model.TypeTask,
-		Project: "PROJ-ABCDE",
+		Project: "TEST",
 		Status:  model.StatusOpen,
 	}
-	path := s.ProjectDir("PROJ-ABCDE") + "/tasks/TASK-ABCDE.md"
+	path := s.ProjectDir("TEST") + "/tasks/TEST-TABCDE.md"
 	require.NoError(t, s.WriteEntity(path, task, "some body"))
 
 	got, body, err := ReadEntity[model.Task](path)
 	require.NoError(t, err)
-	assert.Equal(t, "TASK-ABCDE", got.ID)
+	assert.Equal(t, "TEST-TABCDE", got.ID)
 	assert.Equal(t, "Test Task", got.Title)
 	assert.Equal(t, model.TypeTask, got.Type)
 	assert.Equal(t, "some body", body)
@@ -45,7 +45,7 @@ func TestWriteEntity_ReadEntity_RoundTrip(t *testing.T) {
 
 func TestResolveEntityPath_Task(t *testing.T) {
 	s := newTestStore(t)
-	p, err := s.CreateProject("Test", "")
+	p, err := s.CreateProject("Test Project", "", "")
 	require.NoError(t, err)
 
 	task, err := s.CreateTask("My Task", p.ID, TaskCreateOpts{})
@@ -58,15 +58,15 @@ func TestResolveEntityPath_Task(t *testing.T) {
 
 func TestResolveEntityPath_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.ResolveEntityPath("TASK-ZZZZZ")
+	_, err := s.ResolveEntityPath("ZZZZ-TZZZZZ")
 	assert.Error(t, err)
 }
 
 func TestResolveEntityPath_AcrossProjects(t *testing.T) {
 	s := newTestStore(t)
-	p1, err := s.CreateProject("P1", "")
+	p1, err := s.CreateProject("Project One", "", "")
 	require.NoError(t, err)
-	p2, err := s.CreateProject("P2", "")
+	p2, err := s.CreateProject("Project Two", "", "")
 	require.NoError(t, err)
 
 	_, err = s.CreateTask("Task1", p1.ID, TaskCreateOpts{})
@@ -83,7 +83,7 @@ func TestResolveEntityPath_AcrossProjects(t *testing.T) {
 
 func TestCreateProject(t *testing.T) {
 	s := newTestStore(t)
-	p, err := s.CreateProject("My Project", "")
+	p, err := s.CreateProject("My Project", "", "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, p.ID)
 	assert.Equal(t, "My Project", p.Name)
@@ -92,27 +92,69 @@ func TestCreateProject(t *testing.T) {
 	assert.False(t, p.UpdatedAt.IsZero())
 }
 
+func TestCreateProject_AutoKey(t *testing.T) {
+	s := newTestStore(t)
+	p, err := s.CreateProject("Authentication Service", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, "AUTH", p.ID)
+}
+
+func TestCreateProject_AutoKeyCollision(t *testing.T) {
+	s := newTestStore(t)
+	p1, err := s.CreateProject("Authentication", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, "AUTH", p1.ID)
+
+	p2, err := s.CreateProject("Authorization", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, "AUTH2", p2.ID)
+}
+
+func TestCreateProject_ExplicitKey(t *testing.T) {
+	s := newTestStore(t)
+	p, err := s.CreateProject("Backend API", "API", "")
+	require.NoError(t, err)
+	assert.Equal(t, "API", p.ID)
+}
+
+func TestCreateProject_ExplicitKeyCollision(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.CreateProject("Backend API", "API", "")
+	require.NoError(t, err)
+
+	_, err = s.CreateProject("Another API", "API", "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+}
+
 func TestCreateProject_EmptyName(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.CreateProject("", "")
+	_, err := s.CreateProject("", "", "")
 	assert.Error(t, err)
+}
+
+func TestCreateProject_ShortNameNeedsKey(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.CreateProject("X", "", "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "need at least 2 alpha")
 }
 
 func TestGetProject(t *testing.T) {
 	s := newTestStore(t)
-	p, err := s.CreateProject("Test", "project body")
+	p, err := s.CreateProject("Test Project", "TP", "project body")
 	require.NoError(t, err)
 
 	got, body, err := s.GetProject(p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, p.ID, got.ID)
-	assert.Equal(t, "Test", got.Name)
+	assert.Equal(t, "Test Project", got.Name)
 	assert.Equal(t, "project body", body)
 }
 
 func TestGetProject_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, _, err := s.GetProject("PROJ-ZZZZZ")
+	_, _, err := s.GetProject("ZZZZ")
 	assert.Error(t, err)
 }
 
@@ -125,9 +167,9 @@ func TestListProjects_Empty(t *testing.T) {
 
 func TestListProjects_Multiple(t *testing.T) {
 	s := newTestStore(t)
-	s.CreateProject("P1", "")
-	s.CreateProject("P2", "")
-	s.CreateProject("P3", "")
+	s.CreateProject("Project One", "PR", "")
+	s.CreateProject("Second Proj", "SP", "")
+	s.CreateProject("Third Thing", "TH", "")
 
 	projects, err := s.ListProjects()
 	require.NoError(t, err)
@@ -138,7 +180,7 @@ func TestListProjects_Multiple(t *testing.T) {
 
 func TestCreateDocument(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	d, err := s.CreateDocument("My Doc", p.ID, "")
 	require.NoError(t, err)
@@ -149,7 +191,7 @@ func TestCreateDocument(t *testing.T) {
 
 func TestCreateDocument_WithBody(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	d, err := s.CreateDocument("Doc", p.ID, "# Hello\n\nBody content.")
 	require.NoError(t, err)
@@ -161,14 +203,14 @@ func TestCreateDocument_WithBody(t *testing.T) {
 
 func TestCreateDocument_InvalidProject(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.CreateDocument("Doc", "PROJ-ZZZZZ", "")
+	_, err := s.CreateDocument("Doc", "ZZZZ", "")
 	assert.Error(t, err)
 }
 
 func TestListDocuments_FilterByProject(t *testing.T) {
 	s := newTestStore(t)
-	p1, _ := s.CreateProject("P1", "")
-	p2, _ := s.CreateProject("P2", "")
+	p1, _ := s.CreateProject("Project One", "PR", "")
+	p2, _ := s.CreateProject("Second Proj", "SP", "")
 	s.CreateDocument("D1", p1.ID, "")
 	s.CreateDocument("D2", p1.ID, "")
 	s.CreateDocument("D3", p2.ID, "")
@@ -180,8 +222,8 @@ func TestListDocuments_FilterByProject(t *testing.T) {
 
 func TestListDocuments_AllProjects(t *testing.T) {
 	s := newTestStore(t)
-	p1, _ := s.CreateProject("P1", "")
-	p2, _ := s.CreateProject("P2", "")
+	p1, _ := s.CreateProject("Project One", "PR", "")
+	p2, _ := s.CreateProject("Second Proj", "SP", "")
 	s.CreateDocument("D1", p1.ID, "")
 	s.CreateDocument("D2", p2.ID, "")
 
@@ -192,7 +234,7 @@ func TestListDocuments_AllProjects(t *testing.T) {
 
 func TestUpdateDocument(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	d, _ := s.CreateDocument("Original", p.ID, "old body")
 
 	newTitle := "Updated"
@@ -209,7 +251,7 @@ func TestUpdateDocument(t *testing.T) {
 
 func TestCreateTask_Minimal(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 	require.NoError(t, err)
@@ -222,7 +264,7 @@ func TestCreateTask_Minimal(t *testing.T) {
 
 func TestCreateTask_EpicType(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	epic, err := s.CreateTask("Auth Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	require.NoError(t, err)
@@ -232,7 +274,7 @@ func TestCreateTask_EpicType(t *testing.T) {
 
 func TestCreateTask_WithEpic(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: epic.ID})
@@ -242,7 +284,7 @@ func TestCreateTask_WithEpic(t *testing.T) {
 
 func TestCreateTask_EpicRefMustBeEpicType(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	regularTask, _ := s.CreateTask("Not Epic", p.ID, TaskCreateOpts{})
 
 	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: regularTask.ID})
@@ -252,7 +294,7 @@ func TestCreateTask_EpicRefMustBeEpicType(t *testing.T) {
 
 func TestCreateTask_WithDependencies(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 
 	t2, err := s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
@@ -262,7 +304,7 @@ func TestCreateTask_WithDependencies(t *testing.T) {
 
 func TestCreateTask_CannotDependOnEpic(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 
 	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{DependsOn: []string{epic.ID}})
@@ -272,7 +314,7 @@ func TestCreateTask_CannotDependOnEpic(t *testing.T) {
 
 func TestCreateTask_WithBody(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Body: "task body"})
 	require.NoError(t, err)
@@ -283,23 +325,23 @@ func TestCreateTask_WithBody(t *testing.T) {
 
 func TestCreateTask_InvalidEpic(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
-	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: "TASK-ZZZZZ"})
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Epic: "TP-TZZZZZ"})
 	assert.Error(t, err)
 }
 
 func TestCreateTask_InvalidDependency(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
-	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{DependsOn: []string{"TASK-ZZZZZ"}})
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{DependsOn: []string{"TP-TZZZZZ"}})
 	assert.Error(t, err)
 }
 
 func TestCreateTask_CyclicDep(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	t2, _ := s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
 
@@ -311,7 +353,7 @@ func TestCreateTask_CyclicDep(t *testing.T) {
 
 func TestListTasks_FilterByStatus(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	t2, _ := s.CreateTask("T2", p.ID, TaskCreateOpts{})
 	inProg := model.StatusInProgress
@@ -324,7 +366,7 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 
 func TestListTasks_FilterByEpic(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	s.CreateTask("T1", p.ID, TaskCreateOpts{Epic: epic.ID})
 	s.CreateTask("T2", p.ID, TaskCreateOpts{})
@@ -336,7 +378,7 @@ func TestListTasks_FilterByEpic(t *testing.T) {
 
 func TestListTasks_FilterByType(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 
@@ -348,7 +390,7 @@ func TestListTasks_FilterByType(t *testing.T) {
 
 func TestUpdateTask_Title(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Old Title", p.ID, TaskCreateOpts{})
 
 	newTitle := "New Title"
@@ -362,7 +404,7 @@ func TestUpdateTask_Title(t *testing.T) {
 
 func TestUpdateTask_Body(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{Body: "old body"})
 
 	newBody := "new body"
@@ -375,7 +417,7 @@ func TestUpdateTask_Body(t *testing.T) {
 
 func TestUpdateTask_Status(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	status := model.StatusInProgress
@@ -386,7 +428,7 @@ func TestUpdateTask_Status(t *testing.T) {
 
 func TestUpdateTask_UpdatesTimestamp(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	status := model.StatusInProgress
@@ -397,7 +439,7 @@ func TestUpdateTask_UpdatesTimestamp(t *testing.T) {
 
 func TestAllTaskMap(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	t2, _ := s.CreateTask("T2", p.ID, TaskCreateOpts{})
 
@@ -411,7 +453,7 @@ func TestAllTaskMap(t *testing.T) {
 
 func TestReadyTasks_NoTasks(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	ready, err := s.ReadyTasks(p.ID)
 	require.NoError(t, err)
@@ -420,7 +462,7 @@ func TestReadyTasks_NoTasks(t *testing.T) {
 
 func TestReadyTasks_AllReady(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	s.CreateTask("T2", p.ID, TaskCreateOpts{})
 
@@ -431,7 +473,7 @@ func TestReadyTasks_AllReady(t *testing.T) {
 
 func TestReadyTasks_BlockedExcluded(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
 
@@ -443,7 +485,7 @@ func TestReadyTasks_BlockedExcluded(t *testing.T) {
 
 func TestReadyTasks_ClosedExcluded(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	closed := model.StatusClosed
 	s.UpdateTask(t1.ID, TaskUpdate{Status: &closed})
@@ -455,7 +497,7 @@ func TestReadyTasks_ClosedExcluded(t *testing.T) {
 
 func TestReadyTasks_EpicsExcluded(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
@@ -467,7 +509,7 @@ func TestReadyTasks_EpicsExcluded(t *testing.T) {
 
 func TestReadyTasks_UnblocksAfterClose(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("T1", p.ID, TaskCreateOpts{})
 	t2, _ := s.CreateTask("T2", p.ID, TaskCreateOpts{DependsOn: []string{t1.ID}})
 
@@ -490,7 +532,7 @@ func TestReadyTasks_UnblocksAfterClose(t *testing.T) {
 
 func TestCreateTask_WithPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	pri := 1
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
@@ -506,7 +548,7 @@ func TestCreateTask_WithPriority(t *testing.T) {
 
 func TestCreateTask_WithoutPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 	require.NoError(t, err)
@@ -519,7 +561,7 @@ func TestCreateTask_WithoutPriority(t *testing.T) {
 
 func TestCreateTask_InvalidPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	pri := 5
 	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
@@ -529,7 +571,7 @@ func TestCreateTask_InvalidPriority(t *testing.T) {
 
 func TestUpdateTask_SetPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	pri := 2
@@ -542,7 +584,7 @@ func TestUpdateTask_SetPriority(t *testing.T) {
 
 func TestUpdateTask_ClearPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	pri := 1
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
 
@@ -554,7 +596,7 @@ func TestUpdateTask_ClearPriority(t *testing.T) {
 
 func TestUpdateTask_InvalidPriority(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	pri := 4
@@ -568,7 +610,7 @@ func TestUpdateTask_InvalidPriority(t *testing.T) {
 
 func TestDeleteTask(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	require.NoError(t, s.DeleteTask(task.ID))
@@ -579,12 +621,12 @@ func TestDeleteTask(t *testing.T) {
 
 func TestDeleteTask_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	assert.Error(t, s.DeleteTask("TASK-ZZZZZ"))
+	assert.Error(t, s.DeleteTask("ZZZZ-TZZZZZ"))
 }
 
 func TestDeleteDocument(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	d, _ := s.CreateDocument("Doc", p.ID, "body")
 
 	require.NoError(t, s.DeleteDocument(d.ID))
@@ -595,14 +637,14 @@ func TestDeleteDocument(t *testing.T) {
 
 func TestDeleteDocument_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	assert.Error(t, s.DeleteDocument("DOC-ZZZZZ"))
+	assert.Error(t, s.DeleteDocument("ZZZZ-DZZZZZ"))
 }
 
 // --- Search tests ---
 
 func TestSearch_MatchTitle(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("Authentication Service", "")
+	p, _ := s.CreateProject("Authentication Service", "", "")
 	s.CreateTask("Auth Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	s.CreateTask("Login Form", p.ID, TaskCreateOpts{})
 
@@ -613,7 +655,7 @@ func TestSearch_MatchTitle(t *testing.T) {
 
 func TestSearch_MatchBody(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("Project", "")
+	p, _ := s.CreateProject("Project Test", "", "")
 	s.CreateDocument("Doc", p.ID, "This mentions authentication details.")
 
 	results, err := s.Search("authentication", "")
@@ -623,7 +665,7 @@ func TestSearch_MatchBody(t *testing.T) {
 
 func TestSearch_CaseInsensitive(t *testing.T) {
 	s := newTestStore(t)
-	s.CreateProject("Authentication", "")
+	s.CreateProject("Authentication", "", "")
 
 	results, err := s.Search("AUTHENTICATION", "")
 	require.NoError(t, err)
@@ -632,7 +674,7 @@ func TestSearch_CaseInsensitive(t *testing.T) {
 
 func TestSearch_NoResults(t *testing.T) {
 	s := newTestStore(t)
-	s.CreateProject("Test", "")
+	s.CreateProject("Test Project", "TP", "")
 
 	results, err := s.Search("nonexistent", "")
 	require.NoError(t, err)
@@ -643,7 +685,7 @@ func TestSearch_NoResults(t *testing.T) {
 
 func TestCheckoutEntity_Task(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("My Task", p.ID, TaskCreateOpts{Body: "task body"})
 
 	destDir := t.TempDir()
@@ -662,7 +704,7 @@ func TestCheckoutEntity_Task(t *testing.T) {
 
 func TestCheckoutEntity_Document(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
 
 	destDir := t.TempDir()
@@ -678,13 +720,13 @@ func TestCheckoutEntity_Document(t *testing.T) {
 
 func TestCheckoutEntity_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.CheckoutEntity("TASK-ZZZZZ", t.TempDir())
+	_, err := s.CheckoutEntity("ZZZZ-TZZZZZ", t.TempDir())
 	assert.Error(t, err)
 }
 
 func TestCheckinTask_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Original", p.ID, TaskCreateOpts{Body: "old body"})
 
 	destDir := t.TempDir()
@@ -712,7 +754,7 @@ func TestCheckinTask_RoundTrip(t *testing.T) {
 
 func TestCheckinDocument_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("Original", p.ID, "old body")
 
 	destDir := t.TempDir()
@@ -742,7 +784,7 @@ func TestCheckinDocument_RoundTrip(t *testing.T) {
 
 func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	destDir := t.TempDir()
@@ -765,7 +807,7 @@ func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
 
 func TestCheckinDocument_InvalidFrontmatter(t *testing.T) {
 	s := newTestStore(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("Doc", p.ID, "body")
 
 	destDir := t.TempDir()

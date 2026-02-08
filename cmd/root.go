@@ -55,6 +55,7 @@ func init() {
 			"project create": {
 				Examples: []mtp.Example{
 					{Description: "Create a new project", Command: "compass project create \"My Project\""},
+					{Description: "Create with explicit key", Command: "compass project create \"My Project\" --key MYPR"},
 				},
 			},
 			"doc create": {
@@ -63,21 +64,21 @@ func init() {
 					Description: "Markdown body content for the document",
 				},
 				Examples: []mtp.Example{
-					{Description: "Create doc with piped content", Command: "echo '# Design' | compass doc create \"Design Doc\" --project PROJ-XXXXX"},
+					{Description: "Create doc with piped content", Command: "echo '# Design' | compass doc create \"Design Doc\" --project AUTH"},
 				},
 			},
 			"doc checkout": {
 				Stdout: &mtp.IODescriptor{
 					ContentType: "text/plain",
-					Description: "Local file path where the document was checked out (e.g. .compass/DOC-XXXXX.md)",
+					Description: "Local file path where the document was checked out (e.g. .compass/AUTH-DXXXXX.md)",
 				},
 				Examples: []mtp.Example{
-					{Description: "Checkout a document for local editing", Command: "compass doc checkout DOC-XXXXX"},
+					{Description: "Checkout a document for local editing", Command: "compass doc checkout AUTH-DXXXXX"},
 				},
 			},
 			"doc checkin": {
 				Examples: []mtp.Example{
-					{Description: "Check in a locally edited document", Command: "compass doc checkin DOC-XXXXX"},
+					{Description: "Check in a locally edited document", Command: "compass doc checkin AUTH-DXXXXX"},
 				},
 			},
 			"doc update": {
@@ -86,14 +87,14 @@ func init() {
 					Description: "New markdown body content for the document",
 				},
 				Examples: []mtp.Example{
-					{Description: "Update document title", Command: "compass doc update DOC-XXXXX --title \"New Title\""},
-					{Description: "Update document body", Command: "echo '# Updated' | compass doc update DOC-XXXXX"},
+					{Description: "Update document title", Command: "compass doc update AUTH-DXXXXX --title \"New Title\""},
+					{Description: "Update document body", Command: "echo '# Updated' | compass doc update AUTH-DXXXXX"},
 				},
 			},
 			"doc delete": {
 				Examples: []mtp.Example{
-					{Description: "Delete a document (interactive confirm)", Command: "compass doc delete DOC-XXXXX"},
-					{Description: "Delete a document (skip confirm)", Command: "compass doc delete DOC-XXXXX --force"},
+					{Description: "Delete a document (interactive confirm)", Command: "compass doc delete AUTH-DXXXXX"},
+					{Description: "Delete a document (skip confirm)", Command: "compass doc delete AUTH-DXXXXX --force"},
 				},
 			},
 			"task create": {
@@ -102,19 +103,19 @@ func init() {
 					Description: "Markdown body content for the task",
 				},
 				Examples: []mtp.Example{
-					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project PROJ-XXXXX --epic TASK-XXXXX --depends-on TASK-AAAAA,TASK-BBBBB"},
-					{Description: "Create an epic", Command: "compass task create \"Auth\" --project PROJ-XXXXX --type epic"},
-					{Description: "Create a high-priority task", Command: "compass task create \"Urgent fix\" --project PROJ-XXXXX --priority 0"},
+					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project AUTH --epic AUTH-TXXXXX --depends-on AUTH-TAAAAA,AUTH-TBBBBB"},
+					{Description: "Create an epic", Command: "compass task create \"Auth\" --project AUTH --type epic"},
+					{Description: "Create a high-priority task", Command: "compass task create \"Urgent fix\" --project AUTH --priority 0"},
 				},
 			},
 			"task start": {
 				Examples: []mtp.Example{
-					{Description: "Start a task", Command: "compass task start TASK-XXXXX"},
+					{Description: "Start a task", Command: "compass task start AUTH-TXXXXX"},
 				},
 			},
 			"task close": {
 				Examples: []mtp.Example{
-					{Description: "Close a task", Command: "compass task close TASK-XXXXX"},
+					{Description: "Close a task", Command: "compass task close AUTH-TXXXXX"},
 				},
 			},
 			"task ready": {
@@ -123,8 +124,8 @@ func init() {
 					Description: "Next ready task or table of all ready tasks with --all",
 				},
 				Examples: []mtp.Example{
-					{Description: "Show next ready task", Command: "compass task ready --project PROJ-XXXXX"},
-					{Description: "Show all ready tasks", Command: "compass task ready --project PROJ-XXXXX --all"},
+					{Description: "Show next ready task", Command: "compass task ready --project AUTH"},
+					{Description: "Show all ready tasks", Command: "compass task ready --project AUTH --all"},
 				},
 			},
 			"task update": {
@@ -133,29 +134,29 @@ func init() {
 					Description: "New markdown body content for the task",
 				},
 				Examples: []mtp.Example{
-					{Description: "Update task title", Command: "compass task update TASK-XXXXX --title \"New Title\""},
-					{Description: "Update task body", Command: "echo '# Updated' | compass task update TASK-XXXXX"},
-					{Description: "Set task priority", Command: "compass task update TASK-XXXXX --priority 1"},
+					{Description: "Update task title", Command: "compass task update AUTH-TXXXXX --title \"New Title\""},
+					{Description: "Update task body", Command: "echo '# Updated' | compass task update AUTH-TXXXXX"},
+					{Description: "Set task priority", Command: "compass task update AUTH-TXXXXX --priority 1"},
 				},
 			},
 			"task delete": {
 				Examples: []mtp.Example{
-					{Description: "Delete a task (interactive confirm)", Command: "compass task delete TASK-XXXXX"},
-					{Description: "Delete a task (skip confirm)", Command: "compass task delete TASK-XXXXX --force"},
+					{Description: "Delete a task (interactive confirm)", Command: "compass task delete AUTH-TXXXXX"},
+					{Description: "Delete a task (skip confirm)", Command: "compass task delete AUTH-TXXXXX --force"},
 				},
 			},
 			"task checkout": {
 				Stdout: &mtp.IODescriptor{
 					ContentType: "text/plain",
-					Description: "Local file path where the task was checked out (e.g. .compass/TASK-XXXXX.md)",
+					Description: "Local file path where the task was checked out (e.g. .compass/AUTH-TXXXXX.md)",
 				},
 				Examples: []mtp.Example{
-					{Description: "Checkout a task for local editing", Command: "compass task checkout TASK-XXXXX"},
+					{Description: "Checkout a task for local editing", Command: "compass task checkout AUTH-TXXXXX"},
 				},
 			},
 			"task checkin": {
 				Examples: []mtp.Example{
-					{Description: "Check in a locally edited task", Command: "compass task checkin TASK-XXXXX"},
+					{Description: "Check in a locally edited task", Command: "compass task checkin AUTH-TXXXXX"},
 				},
 			},
 			"task list": {

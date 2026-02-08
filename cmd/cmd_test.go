@@ -40,6 +40,16 @@ func TestProjectCreate_Success(t *testing.T) {
 	assert.Equal(t, "Test Project", projects[0].Name)
 }
 
+func TestProjectCreate_WithKey(t *testing.T) {
+	s, _ := setupEnv(t)
+	require.NoError(t, run(t, "project", "create", "Test Project", "--key", "TP"))
+
+	projects, err := s.ListProjects()
+	require.NoError(t, err)
+	require.Len(t, projects, 1)
+	assert.Equal(t, "TP", projects[0].ID)
+}
+
 func TestProjectList_Empty(t *testing.T) {
 	setupEnv(t)
 	require.NoError(t, run(t, "project", "list"))
@@ -47,12 +57,12 @@ func TestProjectList_Empty(t *testing.T) {
 
 func TestProjectShow_NotFound(t *testing.T) {
 	setupEnv(t)
-	assert.Error(t, run(t, "project", "show", "PROJ-ZZZZZ"))
+	assert.Error(t, run(t, "project", "show", "ZZZZ"))
 }
 
 func TestProjectSetDefault(t *testing.T) {
 	s, dir := setupEnv(t)
-	p, err := s.CreateProject("P", "")
+	p, err := s.CreateProject("Test Project", "TP", "")
 	require.NoError(t, err)
 
 	require.NoError(t, run(t, "project", "set-default", p.ID))
@@ -64,7 +74,7 @@ func TestProjectSetDefault(t *testing.T) {
 
 func TestDocCreate_WithProject(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	require.NoError(t, run(t, "doc", "create", "My Doc", "--project", p.ID))
 
@@ -75,7 +85,7 @@ func TestDocCreate_WithProject(t *testing.T) {
 
 func TestDocCreate_DefaultProject(t *testing.T) {
 	s, dir := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	cfg = &config.Config{DefaultProject: p.ID}
 	config.Save(dir, cfg)
 
@@ -89,7 +99,7 @@ func TestDocCreate_DefaultProject(t *testing.T) {
 
 func TestTaskCreate_Minimal(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID))
 
@@ -101,7 +111,7 @@ func TestTaskCreate_Minimal(t *testing.T) {
 
 func TestTaskCreate_EpicType(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	require.NoError(t, run(t, "task", "create", "Auth Epic", "--project", p.ID, "--type", "epic"))
 
@@ -114,7 +124,7 @@ func TestTaskCreate_EpicType(t *testing.T) {
 
 func TestTaskCreate_WithPriority(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	require.NoError(t, run(t, "task", "create", "Urgent", "--project", p.ID, "--type", "task", "--priority", "1"))
 
@@ -127,7 +137,7 @@ func TestTaskCreate_WithPriority(t *testing.T) {
 
 func TestTaskCreate_NoPriority(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 
 	require.NoError(t, run(t, "task", "create", "Normal", "--project", p.ID, "--type", "task", "--priority", "-1"))
 
@@ -139,7 +149,7 @@ func TestTaskCreate_NoPriority(t *testing.T) {
 
 func TestTaskUpdate_Priority(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "update", task.ID, "--priority", "0"))
@@ -152,7 +162,7 @@ func TestTaskUpdate_Priority(t *testing.T) {
 
 func TestTaskCreate_WithDeps(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	t1, _ := s.CreateTask("Dep", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--type", "task", "--depends-on", t1.ID))
@@ -164,7 +174,7 @@ func TestTaskCreate_WithDeps(t *testing.T) {
 
 func TestTaskUpdate_Status(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "update", task.ID, "--status", "in_progress"))
@@ -176,7 +186,7 @@ func TestTaskUpdate_Status(t *testing.T) {
 
 func TestTaskStart(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "start", task.ID))
@@ -188,7 +198,7 @@ func TestTaskStart(t *testing.T) {
 
 func TestTaskClose(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "close", task.ID))
@@ -200,7 +210,7 @@ func TestTaskClose(t *testing.T) {
 
 func TestTaskReady(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	cfg = &config.Config{DefaultProject: p.ID}
 	s.CreateTask("Ready Task", p.ID, store.TaskCreateOpts{})
 
@@ -209,7 +219,7 @@ func TestTaskReady(t *testing.T) {
 
 func TestTaskReady_All(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	cfg = &config.Config{DefaultProject: p.ID}
 	s.CreateTask("T1", p.ID, store.TaskCreateOpts{})
 	s.CreateTask("T2", p.ID, store.TaskCreateOpts{})
@@ -219,7 +229,7 @@ func TestTaskReady_All(t *testing.T) {
 
 func TestTaskDelete_Force(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "delete", task.ID, "--force"))
@@ -230,7 +240,7 @@ func TestTaskDelete_Force(t *testing.T) {
 
 func TestDocDelete_Force(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	d, _ := s.CreateDocument("Doc", p.ID, "body")
 
 	require.NoError(t, run(t, "doc", "delete", d.ID, "--force"))
@@ -241,7 +251,7 @@ func TestDocDelete_Force(t *testing.T) {
 
 func TestTaskGraph(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	cfg = &config.Config{DefaultProject: p.ID}
 	s.CreateTask("Root", p.ID, store.TaskCreateOpts{})
 
@@ -250,13 +260,13 @@ func TestTaskGraph(t *testing.T) {
 
 func TestSearch_NoResults(t *testing.T) {
 	s, _ := setupEnv(t)
-	s.CreateProject("Test", "")
+	s.CreateProject("Test Project", "TP", "")
 	require.NoError(t, run(t, "search", "xyznonexistent"))
 }
 
 func TestTaskCheckout(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "task body"})
 
 	// Change to a temp dir so .compass/ is created there
@@ -273,7 +283,7 @@ func TestTaskCheckout(t *testing.T) {
 
 func TestTaskCheckin(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "old body"})
 
 	origDir, _ := os.Getwd()
@@ -296,7 +306,7 @@ func TestTaskCheckin(t *testing.T) {
 
 func TestDocCheckout(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
 
 	origDir, _ := os.Getwd()
@@ -312,7 +322,7 @@ func TestDocCheckout(t *testing.T) {
 
 func TestDocCheckin(t *testing.T) {
 	s, _ := setupEnv(t)
-	p, _ := s.CreateProject("P", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "old body")
 
 	origDir, _ := os.Getwd()
@@ -335,7 +345,7 @@ func TestE2EWorkflow(t *testing.T) {
 	s, _ := setupEnv(t)
 
 	// 1. Create project
-	p, err := s.CreateProject("E2E Project", "")
+	p, err := s.CreateProject("E2E Project", "", "")
 	require.NoError(t, err)
 
 	// 2. Set default

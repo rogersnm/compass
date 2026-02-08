@@ -53,7 +53,7 @@ func (s *Store) CreateTask(title, projectID string, opts TaskCreateOpts) (*model
 		}
 	}
 
-	tid, err := id.New(id.Task)
+	tid, err := id.NewTaskID(projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (s *Store) ListTasks(filter TaskFilter) ([]model.Task, error) {
 	var tasks []model.Task
 	for _, d := range dirs {
 		taskDir := filepath.Join(d, "tasks")
-		files, err := s.ListFiles(taskDir, "TASK-*.md")
+		files, err := s.ListFiles(taskDir, "*.md")
 		if err != nil {
 			continue
 		}
