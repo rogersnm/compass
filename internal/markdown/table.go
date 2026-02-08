@@ -40,9 +40,9 @@ func RenderTaskTable(tasks []model.Task, allTasks map[string]*model.Task) string
 	rows := make([][]string, len(tasks))
 	for i, t := range tasks {
 		status := RenderStatus(string(t.Status), t.IsBlocked(allTasks))
-		rows[i] = []string{t.ID, t.Title, status, t.Project}
+		rows[i] = []string{t.ID, t.Title, model.FormatPriority(t.Priority), status, t.Project}
 	}
-	return renderTable([]string{"ID", "Title", "Status", "Project"}, rows)
+	return renderTable([]string{"ID", "Title", "Pri", "Status", "Project"}, rows)
 }
 
 func renderTable(headers []string, rows [][]string) string {

@@ -38,9 +38,15 @@ var taskCreateCmd = &cobra.Command{
 
 		body := readStdin()
 
+		var priority *int
+		if p, _ := cmd.Flags().GetInt("priority"); p >= 0 {
+			priority = &p
+		}
+
 		t, err := st.CreateTask(args[0], projectID, store.TaskCreateOpts{
 			Type:      model.TaskType(typeStr),
 			Epic:      epicID,
+			Priority:  priority,
 			DependsOn: deps,
 			Body:      body,
 		})
@@ -97,10 +103,15 @@ var taskShowCmd = &cobra.Command{
 			markdown.RenderField("Type", string(t.Type)),
 			markdown.RenderField("Project", t.Project),
 			markdown.RenderField("Status", markdown.RenderStatus(string(t.Status), blocked)),
+		}
+		if t.Priority != nil {
+			fields = append(fields, markdown.RenderField("Priority", model.FormatPriority(t.Priority)))
+		}
+		fields = append(fields,
 			markdown.RenderField("Created by", t.CreatedBy),
 			markdown.RenderField("Created", t.CreatedAt.Format("2006-01-02 15:04:05")),
 			markdown.RenderField("Updated", t.UpdatedAt.Format("2006-01-02 15:04:05")),
-		}
+		)
 		if t.Epic != "" {
 			fields = append(fields, markdown.RenderField("Epic", t.Epic))
 		}
@@ -163,6 +174,10 @@ var taskUpdateCmd = &cobra.Command{
 			s := model.Status(statusStr)
 			upd.Status = &s
 		}
+		if p, _ := cmd.Flags().GetInt("priority"); p >= 0 {
+			pp := &p
+			upd.Priority = &pp
+		}
 		if cmd.Flags().Changed("depends-on") {
 			depsStr, _ := cmd.Flags().GetString("depends-on")
 			var deps []string
@@ -177,8 +192,8 @@ var taskUpdateCmd = &cobra.Command{
 			upd.Body = &body
 		}
 
-		if upd.Title == nil && upd.Status == nil && upd.DependsOn == nil && upd.Body == nil {
-			return fmt.Errorf("at least one update flag or piped body is required (--title, --status, --depends-on, stdin)")
+		if upd.Title == nil && upd.Status == nil && upd.Priority == nil && upd.DependsOn == nil && upd.Body == nil {
+			return fmt.Errorf("at least one update flag or piped body is required (--title, --status, --priority, --depends-on, stdin)")
 		}
 
 		t, err := st.UpdateTask(args[0], upd)
@@ -346,6 +361,7 @@ func init() {
 	taskCreateCmd.Flags().StringP("project", "p", "", "project ID")
 	taskCreateCmd.Flags().StringP("epic", "e", "", "epic ID (must reference a type=epic task)")
 	taskCreateCmd.Flags().StringP("type", "t", "task", "task type (task, epic)")
+	taskCreateCmd.Flags().IntP("priority", "P", -1, "priority (0=P0 critical, 1=P1 high, 2=P2 medium, 3=P3 low)")
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
 
 	taskListCmd.Flags().StringP("project", "p", "", "filter by project")
@@ -355,6 +371,7 @@ func init() {
 
 	taskUpdateCmd.Flags().String("title", "", "new title")
 	taskUpdateCmd.Flags().StringP("status", "s", "", "new status (open, in_progress, closed)")
+	taskUpdateCmd.Flags().IntP("priority", "P", -1, "priority (0-3, or -1 to clear)")
 	taskUpdateCmd.Flags().String("depends-on", "", "comma-separated task IDs (replaces existing)")
 
 	taskGraphCmd.Flags().StringP("project", "p", "", "project ID")

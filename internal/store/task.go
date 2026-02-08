@@ -13,6 +13,7 @@ import (
 type TaskCreateOpts struct {
 	Type      model.TaskType
 	Epic      string
+	Priority  *int
 	DependsOn []string
 	Body      string
 }
@@ -27,6 +28,7 @@ type TaskFilter struct {
 type TaskUpdate struct {
 	Title     *string
 	Status    *model.Status
+	Priority  **int
 	DependsOn *[]string
 	Body      *string
 }
@@ -63,6 +65,7 @@ func (s *Store) CreateTask(title, projectID string, opts TaskCreateOpts) (*model
 		Project:   projectID,
 		Epic:      opts.Epic,
 		Status:    model.StatusOpen,
+		Priority:  opts.Priority,
 		DependsOn: opts.DependsOn,
 		CreatedBy: currentUser(),
 		CreatedAt: now(),
@@ -149,6 +152,9 @@ func (s *Store) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, error) {
 	}
 	if upd.Status != nil {
 		t.Status = *upd.Status
+	}
+	if upd.Priority != nil {
+		t.Priority = *upd.Priority
 	}
 	if upd.DependsOn != nil {
 		t.DependsOn = *upd.DependsOn

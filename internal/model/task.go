@@ -19,6 +19,7 @@ type Task struct {
 	Project   string   `yaml:"project"`
 	Epic      string   `yaml:"epic,omitempty"`
 	Status    Status   `yaml:"status"`
+	Priority  *int     `yaml:"priority,omitempty"`
 	DependsOn []string `yaml:"depends_on,omitempty"`
 	CreatedBy string   `yaml:"created_by"`
 	CreatedAt time.Time `yaml:"created_at"`
@@ -41,6 +42,9 @@ func (t *Task) Validate() error {
 	if err := ValidateStatus(t.Status); err != nil {
 		return err
 	}
+	if t.Priority != nil && (*t.Priority < 0 || *t.Priority > 3) {
+		return fmt.Errorf("invalid priority %d: must be 0-3", *t.Priority)
+	}
 	if t.Type == TypeEpic && len(t.DependsOn) > 0 {
 		return fmt.Errorf("epic-type tasks cannot have dependencies")
 	}
@@ -55,6 +59,14 @@ func (t *Task) Validate() error {
 		seen[dep] = true
 	}
 	return nil
+}
+
+// FormatPriority returns "P0"-"P3" or "" if unset.
+func FormatPriority(p *int) string {
+	if p == nil {
+		return ""
+	}
+	return fmt.Sprintf("P%d", *p)
 }
 
 // IsBlocked returns true if any dependency is not closed.

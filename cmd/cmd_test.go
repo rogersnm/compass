@@ -112,6 +112,44 @@ func TestTaskCreate_EpicType(t *testing.T) {
 	assert.Equal(t, model.TypeEpic, tasks[0].Type)
 }
 
+func TestTaskCreate_WithPriority(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+
+	require.NoError(t, run(t, "task", "create", "Urgent", "--project", p.ID, "--type", "task", "--priority", "1"))
+
+	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
+	require.NoError(t, err)
+	require.Len(t, tasks, 1)
+	require.NotNil(t, tasks[0].Priority)
+	assert.Equal(t, 1, *tasks[0].Priority)
+}
+
+func TestTaskCreate_NoPriority(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+
+	require.NoError(t, run(t, "task", "create", "Normal", "--project", p.ID, "--type", "task", "--priority", "-1"))
+
+	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
+	require.NoError(t, err)
+	require.Len(t, tasks, 1)
+	assert.Nil(t, tasks[0].Priority)
+}
+
+func TestTaskUpdate_Priority(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
+
+	require.NoError(t, run(t, "task", "update", task.ID, "--priority", "0"))
+
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.Priority)
+	assert.Equal(t, 0, *got.Priority)
+}
+
 func TestTaskCreate_WithDeps(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("P", "")

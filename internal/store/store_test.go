@@ -486,6 +486,84 @@ func TestReadyTasks_UnblocksAfterClose(t *testing.T) {
 	assert.Equal(t, t2.ID, ready[0].ID)
 }
 
+// --- Priority tests ---
+
+func TestCreateTask_WithPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+
+	pri := 1
+	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
+	require.NoError(t, err)
+	require.NotNil(t, task.Priority)
+	assert.Equal(t, 1, *task.Priority)
+
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.Priority)
+	assert.Equal(t, 1, *got.Priority)
+}
+
+func TestCreateTask_WithoutPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+
+	task, err := s.CreateTask("Task", p.ID, TaskCreateOpts{})
+	require.NoError(t, err)
+	assert.Nil(t, task.Priority)
+
+	got, _, err := s.GetTask(task.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got.Priority)
+}
+
+func TestCreateTask_InvalidPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+
+	pri := 5
+	_, err := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid priority")
+}
+
+func TestUpdateTask_SetPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
+
+	pri := 2
+	pp := &pri
+	updated, err := s.UpdateTask(task.ID, TaskUpdate{Priority: &pp})
+	require.NoError(t, err)
+	require.NotNil(t, updated.Priority)
+	assert.Equal(t, 2, *updated.Priority)
+}
+
+func TestUpdateTask_ClearPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	pri := 1
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{Priority: &pri})
+
+	var cleared *int
+	updated, err := s.UpdateTask(task.ID, TaskUpdate{Priority: &cleared})
+	require.NoError(t, err)
+	assert.Nil(t, updated.Priority)
+}
+
+func TestUpdateTask_InvalidPriority(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("P", "")
+	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
+
+	pri := 4
+	pp := &pri
+	_, err := s.UpdateTask(task.ID, TaskUpdate{Priority: &pp})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid priority")
+}
+
 // --- Delete tests ---
 
 func TestDeleteTask(t *testing.T) {

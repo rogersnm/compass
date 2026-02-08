@@ -104,6 +104,7 @@ func init() {
 				Examples: []mtp.Example{
 					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project PROJ-XXXXX --epic TASK-XXXXX --depends-on TASK-AAAAA,TASK-BBBBB"},
 					{Description: "Create an epic", Command: "compass task create \"Auth\" --project PROJ-XXXXX --type epic"},
+					{Description: "Create a high-priority task", Command: "compass task create \"Urgent fix\" --project PROJ-XXXXX --priority 0"},
 				},
 			},
 			"task start": {
@@ -134,6 +135,7 @@ func init() {
 				Examples: []mtp.Example{
 					{Description: "Update task title", Command: "compass task update TASK-XXXXX --title \"New Title\""},
 					{Description: "Update task body", Command: "echo '# Updated' | compass task update TASK-XXXXX"},
+					{Description: "Set task priority", Command: "compass task update TASK-XXXXX --priority 1"},
 				},
 			},
 			"task delete": {
