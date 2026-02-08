@@ -6,7 +6,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
+	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"golang.org/x/term"
 )
 
@@ -26,10 +29,20 @@ func termWidth() int {
 	return 80
 }
 
+func autoStyle() ansi.StyleConfig {
+	if termenv.HasDarkBackground() {
+		return styles.DarkStyleConfig
+	}
+	return styles.LightStyleConfig
+}
+
 func RenderMarkdown(content string) (string, error) {
-	// glamour's default styles add a 2-char left margin to the document block;
-	// subtract it so rendered output fits the terminal without overflow.
-	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(termWidth()-2))
+	style := autoStyle()
+	margin := 0
+	if style.Document.Margin != nil {
+		margin = int(*style.Document.Margin)
+	}
+	r, err := glamour.NewTermRenderer(glamour.WithStyles(style), glamour.WithWordWrap(termWidth()-margin))
 	if err != nil {
 		return "", fmt.Errorf("creating renderer: %w", err)
 	}
