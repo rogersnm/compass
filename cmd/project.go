@@ -50,7 +50,8 @@ var projectShowCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		raw, _ := cmd.Flags().GetBool("raw")
-		if raw {
+		noColor, _ := cmd.Flags().GetBool("no-color")
+		if raw || noColor {
 			path, err := st.ResolveEntityPath(args[0])
 			if err != nil {
 				return err
@@ -136,6 +137,8 @@ var projectDeleteCmd = &cobra.Command{
 func init() {
 	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
 	projectShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
+	projectShowCmd.Flags().Bool("no-color", false, "alias for --raw")
+	projectShowCmd.Flags().Lookup("no-color").Hidden = true
 	projectDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
 
 	projectCmd.AddCommand(projectCreateCmd)

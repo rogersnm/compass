@@ -92,7 +92,8 @@ var taskShowCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		raw, _ := cmd.Flags().GetBool("raw")
-		if raw {
+		noColor, _ := cmd.Flags().GetBool("no-color")
+		if raw || noColor {
 			path, err := st.ResolveEntityPath(args[0])
 			if err != nil {
 				return err
@@ -380,6 +381,8 @@ func init() {
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
 
 	taskShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
+	taskShowCmd.Flags().Bool("no-color", false, "alias for --raw")
+	taskShowCmd.Flags().Lookup("no-color").Hidden = true
 
 	taskListCmd.Flags().StringP("project", "P", "", "filter by project")
 	taskListCmd.Flags().StringP("epic", "e", "", "filter by epic")

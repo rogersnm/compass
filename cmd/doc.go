@@ -56,7 +56,8 @@ var docShowCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		raw, _ := cmd.Flags().GetBool("raw")
-		if raw {
+		noColor, _ := cmd.Flags().GetBool("no-color")
+		if raw || noColor {
 			path, err := st.ResolveEntityPath(args[0])
 			if err != nil {
 				return err
@@ -188,6 +189,8 @@ var docCheckinCmd = &cobra.Command{
 func init() {
 	docCreateCmd.Flags().StringP("project", "P", "", "project ID")
 	docShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
+	docShowCmd.Flags().Bool("no-color", false, "alias for --raw")
+	docShowCmd.Flags().Lookup("no-color").Hidden = true
 	docListCmd.Flags().StringP("project", "P", "", "filter by project")
 	docUpdateCmd.Flags().String("title", "", "new title")
 	docDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
