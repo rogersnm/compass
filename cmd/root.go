@@ -15,7 +15,7 @@ import (
 var (
 	version = "dev"
 	dataDir string
-	st      *store.Store
+	st      store.Store
 	cfg     *config.Config
 )
 
@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("creating data directory: %w", err)
 		}
 
-		st = store.New(dataDir)
+		st = store.NewLocal(dataDir)
 
 		var err error
 		cfg, err = config.Load(dataDir)

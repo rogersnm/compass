@@ -9,7 +9,7 @@ import (
 	"github.com/rogersnm/compass/internal/model"
 )
 
-func (s *Store) CreateDocument(title, projectID, body string) (*model.Document, error) {
+func (s *LocalStore) CreateDocument(title, projectID, body string) (*model.Document, error) {
 	if _, _, err := s.GetProject(projectID); err != nil {
 		return nil, fmt.Errorf("project %s not found", projectID)
 	}
@@ -38,7 +38,7 @@ func (s *Store) CreateDocument(title, projectID, body string) (*model.Document, 
 	return d, nil
 }
 
-func (s *Store) GetDocument(docID string) (*model.Document, string, error) {
+func (s *LocalStore) GetDocument(docID string) (*model.Document, string, error) {
 	path, err := s.ResolveEntityPath(docID)
 	if err != nil {
 		return nil, "", err
@@ -50,7 +50,7 @@ func (s *Store) GetDocument(docID string) (*model.Document, string, error) {
 	return &d, body, nil
 }
 
-func (s *Store) ListDocuments(projectID string) ([]model.Document, error) {
+func (s *LocalStore) ListDocuments(projectID string) ([]model.Document, error) {
 	var dirs []string
 	if projectID != "" {
 		dirs = []string{s.ProjectDir(projectID)}
@@ -80,7 +80,7 @@ func (s *Store) ListDocuments(projectID string) ([]model.Document, error) {
 	return docs, nil
 }
 
-func (s *Store) UpdateDocument(docID string, title, body *string) (*model.Document, error) {
+func (s *LocalStore) UpdateDocument(docID string, title, body *string) (*model.Document, error) {
 	path, err := s.ResolveEntityPath(docID)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (s *Store) UpdateDocument(docID string, title, body *string) (*model.Docume
 	return &d, nil
 }
 
-func (s *Store) DeleteDocument(docID string) error {
+func (s *LocalStore) DeleteDocument(docID string) error {
 	path, err := s.ResolveEntityPath(docID)
 	if err != nil {
 		return err

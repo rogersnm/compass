@@ -11,7 +11,7 @@ type SearchResult struct {
 	Snippet string
 }
 
-func (s *Store) Search(query, projectID string) ([]SearchResult, error) {
+func (s *LocalStore) Search(query, projectID string) ([]SearchResult, error) {
 	q := strings.ToLower(query)
 	var results []SearchResult
 

@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupEnv(t *testing.T) (*store.Store, string) {
+func setupEnv(t *testing.T) (store.Store, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dataDir = dir
-	st = store.New(dir)
+	st = store.NewLocal(dir)
 	cfg = &config.Config{}
 	return st, dir
 }

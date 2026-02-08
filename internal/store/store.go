@@ -12,23 +12,27 @@ import (
 	"github.com/rogersnm/compass/internal/model"
 )
 
-type Store struct {
+// LocalStore implements Store using the local filesystem.
+type LocalStore struct {
 	BaseDir string
 }
 
-func New(baseDir string) *Store {
-	return &Store{BaseDir: baseDir}
+// compile-time check
+var _ Store = (*LocalStore)(nil)
+
+func NewLocal(baseDir string) *LocalStore {
+	return &LocalStore{BaseDir: baseDir}
 }
 
-func (s *Store) ProjectsDir() string {
+func (s *LocalStore) ProjectsDir() string {
 	return filepath.Join(s.BaseDir, "projects")
 }
 
-func (s *Store) ProjectDir(projectKey string) string {
+func (s *LocalStore) ProjectDir(projectKey string) string {
 	return filepath.Join(s.ProjectsDir(), projectKey)
 }
 
-func (s *Store) EnsureProjectDirs(projectKey string) error {
+func (s *LocalStore) EnsureProjectDirs(projectKey string) error {
 	dirs := []string{
 		filepath.Join(s.ProjectDir(projectKey), "documents"),
 		filepath.Join(s.ProjectDir(projectKey), "tasks"),
@@ -41,7 +45,7 @@ func (s *Store) EnsureProjectDirs(projectKey string) error {
 	return nil
 }
 
-func (s *Store) WriteEntity(path string, meta any, body string) error {
+func (s *LocalStore) WriteEntity(path string, meta any, body string) error {
 	data, err := markdown.Marshal(meta, body)
 	if err != nil {
 		return err
@@ -62,7 +66,7 @@ func ReadEntity[T any](path string) (T, string, error) {
 	return markdown.Parse[T](f)
 }
 
-func (s *Store) ListFiles(dir, pattern string) ([]string, error) {
+func (s *LocalStore) ListFiles(dir, pattern string) ([]string, error) {
 	matches, err := filepath.Glob(filepath.Join(dir, pattern))
 	if err != nil {
 		return nil, fmt.Errorf("globbing %s/%s: %w", dir, pattern, err)
@@ -71,7 +75,7 @@ func (s *Store) ListFiles(dir, pattern string) ([]string, error) {
 }
 
 // ResolveEntityPath computes the file path for an entity ID directly from the ID structure.
-func (s *Store) ResolveEntityPath(entityID string) (string, error) {
+func (s *LocalStore) ResolveEntityPath(entityID string) (string, error) {
 	key, entityType, _, err := id.Parse(entityID)
 	if err != nil {
 		return "", err
@@ -95,7 +99,7 @@ func (s *Store) ResolveEntityPath(entityID string) (string, error) {
 	return path, nil
 }
 
-func (s *Store) listProjectDirs() ([]string, error) {
+func (s *LocalStore) listProjectDirs() ([]string, error) {
 	entries, err := os.ReadDir(s.ProjectsDir())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -113,7 +117,7 @@ func (s *Store) listProjectDirs() ([]string, error) {
 }
 
 // CheckoutEntity copies an entity's .md file to destDir/<ID>.md and returns the local path.
-func (s *Store) CheckoutEntity(entityID, destDir string) (string, error) {
+func (s *LocalStore) CheckoutEntity(entityID, destDir string) (string, error) {
 	srcPath, err := s.ResolveEntityPath(entityID)
 	if err != nil {
 		return "", err
@@ -133,7 +137,7 @@ func (s *Store) CheckoutEntity(entityID, destDir string) (string, error) {
 }
 
 // CheckinTask reads a local task file, validates it, writes it back to the store, and removes the local file.
-func (s *Store) CheckinTask(localPath string) (*model.Task, error) {
+func (s *LocalStore) CheckinTask(localPath string) (*model.Task, error) {
 	t, body, err := ReadEntity[model.Task](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)
@@ -159,7 +163,7 @@ func (s *Store) CheckinTask(localPath string) (*model.Task, error) {
 }
 
 // CheckinDocument reads a local document file, validates it, writes it back to the store, and removes the local file.
-func (s *Store) CheckinDocument(localPath string) (*model.Document, error) {
+func (s *LocalStore) CheckinDocument(localPath string) (*model.Document, error) {
 	d, body, err := ReadEntity[model.Document](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)

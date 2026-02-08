@@ -9,7 +9,7 @@ import (
 	"github.com/rogersnm/compass/internal/model"
 )
 
-func (s *Store) CreateProject(name, key, body string) (*model.Project, error) {
+func (s *LocalStore) CreateProject(name, key, body string) (*model.Project, error) {
 	if key == "" {
 		generated, err := id.GenerateKey(name)
 		if err != nil {
@@ -65,12 +65,12 @@ func (s *Store) CreateProject(name, key, body string) (*model.Project, error) {
 	return p, nil
 }
 
-func (s *Store) projectKeyExists(key string) bool {
+func (s *LocalStore) projectKeyExists(key string) bool {
 	_, err := os.Stat(s.ProjectDir(key))
 	return err == nil
 }
 
-func (s *Store) GetProject(projectID string) (*model.Project, string, error) {
+func (s *LocalStore) GetProject(projectID string) (*model.Project, string, error) {
 	path, err := s.ResolveEntityPath(projectID)
 	if err != nil {
 		return nil, "", err
@@ -82,7 +82,7 @@ func (s *Store) GetProject(projectID string) (*model.Project, string, error) {
 	return &p, body, nil
 }
 
-func (s *Store) DeleteProject(projectID string) error {
+func (s *LocalStore) DeleteProject(projectID string) error {
 	dir := s.ProjectDir(projectID)
 	if _, err := os.Stat(dir); err != nil {
 		return fmt.Errorf("%s not found", projectID)
@@ -90,7 +90,7 @@ func (s *Store) DeleteProject(projectID string) error {
 	return os.RemoveAll(dir)
 }
 
-func (s *Store) ListProjects() ([]model.Project, error) {
+func (s *LocalStore) ListProjects() ([]model.Project, error) {
 	dirs, err := s.listProjectDirs()
 	if err != nil {
 		return nil, err

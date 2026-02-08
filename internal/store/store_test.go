@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestStore(t *testing.T) *Store {
-	return New(t.TempDir())
+func newTestStore(t *testing.T) *LocalStore {
+	return NewLocal(t.TempDir())
 }
 
 func TestEnsureProjectDirs(t *testing.T) {

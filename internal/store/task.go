@@ -35,7 +35,7 @@ type TaskUpdate struct {
 	Body      *string
 }
 
-func (s *Store) CreateTask(title, projectID string, opts TaskCreateOpts) (*model.Task, error) {
+func (s *LocalStore) CreateTask(title, projectID string, opts TaskCreateOpts) (*model.Task, error) {
 	if _, _, err := s.GetProject(projectID); err != nil {
 		return nil, fmt.Errorf("project %s not found", projectID)
 	}
@@ -88,7 +88,7 @@ func (s *Store) CreateTask(title, projectID string, opts TaskCreateOpts) (*model
 	return t, nil
 }
 
-func (s *Store) GetTask(taskID string) (*model.Task, string, error) {
+func (s *LocalStore) GetTask(taskID string) (*model.Task, string, error) {
 	path, err := s.ResolveEntityPath(taskID)
 	if err != nil {
 		return nil, "", err
@@ -100,7 +100,7 @@ func (s *Store) GetTask(taskID string) (*model.Task, string, error) {
 	return &t, body, nil
 }
 
-func (s *Store) ListTasks(filter TaskFilter) ([]model.Task, error) {
+func (s *LocalStore) ListTasks(filter TaskFilter) ([]model.Task, error) {
 	var dirs []string
 	if filter.ProjectID != "" {
 		dirs = []string{s.ProjectDir(filter.ProjectID)}
@@ -139,7 +139,7 @@ func (s *Store) ListTasks(filter TaskFilter) ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (s *Store) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, error) {
+func (s *LocalStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, error) {
 	path, err := s.ResolveEntityPath(taskID)
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (s *Store) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, error) {
 	return &t, nil
 }
 
-func (s *Store) DeleteTask(taskID string) error {
+func (s *LocalStore) DeleteTask(taskID string) error {
 	path, err := s.ResolveEntityPath(taskID)
 	if err != nil {
 		return err
@@ -191,7 +191,7 @@ func (s *Store) DeleteTask(taskID string) error {
 }
 
 // AllTaskMap returns a map of all tasks in a project, keyed by ID.
-func (s *Store) AllTaskMap(projectID string) (map[string]*model.Task, error) {
+func (s *LocalStore) AllTaskMap(projectID string) (map[string]*model.Task, error) {
 	tasks, err := s.ListTasks(TaskFilter{ProjectID: projectID})
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (s *Store) AllTaskMap(projectID string) (map[string]*model.Task, error) {
 }
 
 // ReadyTasks returns open, unblocked tasks (type=task only), oldest first.
-func (s *Store) ReadyTasks(projectID string) ([]*model.Task, error) {
+func (s *LocalStore) ReadyTasks(projectID string) ([]*model.Task, error) {
 	tasks, err := s.ListTasks(TaskFilter{ProjectID: projectID, Type: model.TypeTask})
 	if err != nil {
 		return nil, err
@@ -229,7 +229,7 @@ func (s *Store) ReadyTasks(projectID string) ([]*model.Task, error) {
 	return ready, nil
 }
 
-func (s *Store) validateDeps(t *model.Task, projectID string) error {
+func (s *LocalStore) validateDeps(t *model.Task, projectID string) error {
 	for _, dep := range t.DependsOn {
 		dt, _, err := s.GetTask(dep)
 		if err != nil {
