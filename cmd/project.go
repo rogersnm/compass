@@ -21,7 +21,8 @@ var projectCreateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, _ := cmd.Flags().GetString("key")
-		p, err := st.CreateProject(args[0], key, "")
+		body := readStdin()
+		p, err := st.CreateProject(args[0], key, body)
 		if err != nil {
 			return err
 		}
