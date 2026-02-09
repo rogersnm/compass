@@ -121,15 +121,18 @@ func (p *apiProject) toModel() *model.Project {
 }
 
 type apiTask struct {
-	TaskID    string     `json:"task_id"`
-	Key       string     `json:"key"`
-	Title     string     `json:"title"`
-	Type      string     `json:"type"`
-	Status    string     `json:"status"`
-	Priority  *int       `json:"priority"`
-	Body      string     `json:"body"`
-	CreatedAt time.Time  `json:"created_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
+	TaskID     string     `json:"task_id"`
+	Key        string     `json:"key"`
+	Title      string     `json:"title"`
+	Type       string     `json:"type"`
+	Status     string     `json:"status"`
+	Priority   *int       `json:"priority"`
+	EpicKey    string     `json:"epic_key"`
+	DependsOn  []string   `json:"depends_on"`
+	ProjectKey string     `json:"project_key"`
+	Body       string     `json:"body"`
+	CreatedAt  time.Time  `json:"created_at"`
+	DeletedAt  *time.Time `json:"deleted_at"`
 }
 
 func (t *apiTask) toModel() *model.Task {
@@ -137,8 +140,11 @@ func (t *apiTask) toModel() *model.Task {
 		ID:        t.Key,
 		Title:     t.Title,
 		Type:      model.TaskType(t.Type),
+		Project:   t.ProjectKey,
 		Status:    model.Status(t.Status),
 		Priority:  t.Priority,
+		Epic:      t.EpicKey,
+		DependsOn: t.DependsOn,
 		CreatedAt: t.CreatedAt,
 		UpdatedAt: t.CreatedAt,
 	}
@@ -273,8 +279,6 @@ func (cs *CloudStore) CreateTask(title, projectID string, opts TaskCreateOpts) (
 	}
 	t := at.toModel()
 	t.Project = projectID
-	t.Epic = opts.Epic
-	t.DependsOn = opts.DependsOn
 	return t, nil
 }
 
