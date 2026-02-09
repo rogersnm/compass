@@ -47,6 +47,8 @@ Tasks have a DAG of dependencies via `depends_on`. Epic-type tasks cannot have d
 
 "Blocked" is computed, not stored: a task is blocked if any dependency is not closed.
 
+Epic status is computed, not stored: derived from child tasks via `model.ComputeEpicStatus()`. No children or all open = `open`, any `in_progress` = `in_progress`, all `closed` = `closed`. Epics must not have a `status` field in frontmatter. Status-changing commands (`task start`, `task close`, `task update --status`) are rejected on epics.
+
 ### Package responsibilities
 
 - `cmd/` - Cobra commands. Global state (`st`, `cfg`, `dataDir`) is set in `PersistentPreRunE`.
