@@ -69,6 +69,38 @@ func FormatPriority(p *int) string {
 	return fmt.Sprintf("P%d", *p)
 }
 
+// ChildrenOf returns tasks whose Epic field matches epicID.
+func ChildrenOf(epicID string, allTasks map[string]*Task) []*Task {
+	var children []*Task
+	for _, t := range allTasks {
+		if t.Epic == epicID {
+			children = append(children, t)
+		}
+	}
+	return children
+}
+
+// ComputeEpicStatus derives an epic's status from its children.
+// No children or all open: open. Any in_progress: in_progress. All closed: closed.
+func ComputeEpicStatus(children []*Task) Status {
+	if len(children) == 0 {
+		return StatusOpen
+	}
+	allClosed := true
+	for _, c := range children {
+		if c.Status == StatusInProgress {
+			return StatusInProgress
+		}
+		if c.Status != StatusClosed {
+			allClosed = false
+		}
+	}
+	if allClosed {
+		return StatusClosed
+	}
+	return StatusOpen
+}
+
 // IsBlocked returns true if any dependency is not closed.
 func (t *Task) IsBlocked(allTasks map[string]*Task) bool {
 	for _, dep := range t.DependsOn {

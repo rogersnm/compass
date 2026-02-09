@@ -149,6 +149,10 @@ func (s *LocalStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, err
 		return nil, err
 	}
 
+	if upd.Status != nil && t.Type == model.TypeEpic {
+		return nil, fmt.Errorf("cannot update epic status: epic status is computed from child tasks")
+	}
+
 	if upd.Title != nil {
 		t.Title = *upd.Title
 	}

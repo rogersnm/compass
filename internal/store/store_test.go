@@ -426,6 +426,28 @@ func TestUpdateTask_Status(t *testing.T) {
 	assert.Equal(t, model.StatusInProgress, updated.Status)
 }
 
+func TestUpdateTask_EpicStatusRejected(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+
+	status := model.StatusInProgress
+	_, err := s.UpdateTask(epic.ID, TaskUpdate{Status: &status})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "epic status is computed")
+}
+
+func TestUpdateTask_EpicNonStatusAllowed(t *testing.T) {
+	s := newTestStore(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	epic, _ := s.CreateTask("Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
+
+	newTitle := "Updated Epic"
+	updated, err := s.UpdateTask(epic.ID, TaskUpdate{Title: &newTitle})
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Epic", updated.Title)
+}
+
 func TestUpdateTask_UpdatesTimestamp(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")

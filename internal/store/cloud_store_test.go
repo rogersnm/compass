@@ -161,6 +161,22 @@ func TestCloudStore_GetTask(t *testing.T) {
 
 func TestCloudStore_UpdateTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			// Epic guard: GET to check task type
+			jsonResponse(w, 200, map[string]any{
+				"data": map[string]any{
+					"task_id":    "uuid-task",
+					"display_id": "MP-TABCDE",
+					"title":      "My Task",
+					"type":       "task",
+					"status":     "open",
+					"body":       "",
+					"created_at": "2026-01-01T00:00:00Z",
+				},
+			})
+			return
+		}
+
 		assert.Equal(t, "PATCH", r.Method)
 		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 
@@ -186,6 +202,29 @@ func TestCloudStore_UpdateTask(t *testing.T) {
 	task, err := cs.UpdateTask("MP-TABCDE", TaskUpdate{Status: &s})
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusInProgress, task.Status)
+}
+
+func TestCloudStore_UpdateTask_EpicStatusRejected(t *testing.T) {
+	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
+		// GET to check task type
+		jsonResponse(w, 200, map[string]any{
+			"data": map[string]any{
+				"task_id":    "uuid-epic",
+				"display_id": "MP-TEPIC1",
+				"title":      "My Epic",
+				"type":       "epic",
+				"status":     "open",
+				"body":       "",
+				"created_at": "2026-01-01T00:00:00Z",
+			},
+		})
+	})
+	defer srv.Close()
+
+	s := model.StatusInProgress
+	_, err := cs.UpdateTask("MP-TEPIC1", TaskUpdate{Status: &s})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "epic status is computed")
 }
 
 func TestCloudStore_DeleteTask(t *testing.T) {

@@ -123,11 +123,17 @@ var taskShowCmd = &cobra.Command{
 		allTasks, _ := st.AllTaskMap(t.Project)
 		blocked := t.IsBlocked(allTasks)
 
+		displayStatus := t.Status
+		if t.Type == model.TypeEpic {
+			children := model.ChildrenOf(t.ID, allTasks)
+			displayStatus = model.ComputeEpicStatus(children)
+		}
+
 		fields := []string{
 			markdown.RenderField("ID", t.ID),
 			markdown.RenderField("Type", string(t.Type)),
 			markdown.RenderField("Project", t.Project),
-			markdown.RenderField("Status", markdown.RenderStatus(string(t.Status), blocked)),
+			markdown.RenderField("Status", markdown.RenderStatus(string(displayStatus), blocked)),
 		}
 		if t.Priority != nil {
 			fields = append(fields, markdown.RenderField("Priority", model.FormatPriority(t.Priority)))

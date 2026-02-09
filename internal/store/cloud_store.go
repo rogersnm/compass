@@ -345,6 +345,16 @@ func (cs *CloudStore) ListTasks(filter TaskFilter) ([]model.Task, error) {
 }
 
 func (cs *CloudStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, error) {
+	if upd.Status != nil {
+		t, _, err := cs.GetTask(taskID)
+		if err != nil {
+			return nil, err
+		}
+		if t.Type == model.TypeEpic {
+			return nil, fmt.Errorf("cannot update epic status: epic status is computed from child tasks")
+		}
+	}
+
 	payload := map[string]any{}
 	if upd.Title != nil {
 		payload["title"] = *upd.Title

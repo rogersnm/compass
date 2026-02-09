@@ -68,6 +68,69 @@ func TestTask_Validate_DuplicateDeps(t *testing.T) {
 	assert.Error(t, task.Validate())
 }
 
+// --- ComputeEpicStatus tests ---
+
+func TestComputeEpicStatus_NoChildren(t *testing.T) {
+	assert.Equal(t, StatusOpen, ComputeEpicStatus(nil))
+}
+
+func TestComputeEpicStatus_AllOpen(t *testing.T) {
+	children := []*Task{
+		{Status: StatusOpen},
+		{Status: StatusOpen},
+	}
+	assert.Equal(t, StatusOpen, ComputeEpicStatus(children))
+}
+
+func TestComputeEpicStatus_AnyInProgress(t *testing.T) {
+	children := []*Task{
+		{Status: StatusOpen},
+		{Status: StatusInProgress},
+		{Status: StatusClosed},
+	}
+	assert.Equal(t, StatusInProgress, ComputeEpicStatus(children))
+}
+
+func TestComputeEpicStatus_AllClosed(t *testing.T) {
+	children := []*Task{
+		{Status: StatusClosed},
+		{Status: StatusClosed},
+	}
+	assert.Equal(t, StatusClosed, ComputeEpicStatus(children))
+}
+
+func TestComputeEpicStatus_MixOpenClosed(t *testing.T) {
+	children := []*Task{
+		{Status: StatusOpen},
+		{Status: StatusClosed},
+	}
+	assert.Equal(t, StatusOpen, ComputeEpicStatus(children))
+}
+
+// --- ChildrenOf tests ---
+
+func TestChildrenOf(t *testing.T) {
+	allTasks := map[string]*Task{
+		"TP-T11111": {ID: "TP-T11111", Epic: "TP-TEPIC1"},
+		"TP-T22222": {ID: "TP-T22222", Epic: "TP-TEPIC1"},
+		"TP-T33333": {ID: "TP-T33333", Epic: ""},
+		"TP-TEPIC1": {ID: "TP-TEPIC1", Type: TypeEpic},
+	}
+	children := ChildrenOf("TP-TEPIC1", allTasks)
+	assert.Len(t, children, 2)
+}
+
+func TestChildrenOf_NoChildren(t *testing.T) {
+	allTasks := map[string]*Task{
+		"TP-T11111": {ID: "TP-T11111", Epic: ""},
+		"TP-TEPIC1": {ID: "TP-TEPIC1", Type: TypeEpic},
+	}
+	children := ChildrenOf("TP-TEPIC1", allTasks)
+	assert.Empty(t, children)
+}
+
+// --- IsBlocked tests ---
+
 func TestTask_IsBlocked_NoDeps(t *testing.T) {
 	task := &Task{ID: "TEST-TABCDE", Status: StatusOpen}
 	assert.False(t, task.IsBlocked(nil))

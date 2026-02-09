@@ -210,6 +210,36 @@ func TestTaskClose(t *testing.T) {
 	assert.Equal(t, model.StatusClosed, got.Status)
 }
 
+func TestTaskStart_EpicRejected(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
+
+	err := run(t, "task", "start", epic.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "epic status is computed")
+}
+
+func TestTaskClose_EpicRejected(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
+
+	err := run(t, "task", "close", epic.ID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "epic status is computed")
+}
+
+func TestTaskUpdate_EpicStatusRejected(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
+
+	err := run(t, "task", "update", epic.ID, "--status", "in_progress")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "epic status is computed")
+}
+
 func TestTaskReady(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
