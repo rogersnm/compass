@@ -77,7 +77,7 @@ func TestTask_Validate_DuplicateDeps(t *testing.T) {
 // --- ComputeEpicStatus tests ---
 
 func TestComputeEpicStatus_NoChildren(t *testing.T) {
-	assert.Equal(t, StatusOpen, ComputeEpicStatus(nil))
+	assert.Equal(t, StatusClosed, ComputeEpicStatus(nil))
 }
 
 func TestComputeEpicStatus_AllOpen(t *testing.T) {

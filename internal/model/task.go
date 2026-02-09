@@ -87,10 +87,10 @@ func ChildrenOf(epicID string, allTasks map[string]*Task) []*Task {
 }
 
 // ComputeEpicStatus derives an epic's status from its children.
-// No children or all open: open. Any in_progress: in_progress. All closed: closed.
+// No children or all closed: closed. Any in_progress: in_progress. All open: open.
 func ComputeEpicStatus(children []*Task) Status {
 	if len(children) == 0 {
-		return StatusOpen
+		return StatusClosed
 	}
 	allClosed := true
 	for _, c := range children {
