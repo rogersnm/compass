@@ -75,3 +75,5 @@ Tag-driven via GoReleaser + GitHub Actions. Cross-compiles for linux/darwin/wind
 git tag v0.x.0
 git push origin v0.x.0
 ```
+
+**Never delete and retag an existing version.** If a tag has been pushed, bump to the next version instead. Force-pushing tags breaks GoReleaser, Homebrew caches, and anyone who already pulled the release.
