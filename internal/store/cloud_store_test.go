@@ -117,7 +117,7 @@ func TestCloudStore_CreateTask(t *testing.T) {
 		jsonResponse(w, 201, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-task",
-				"display_id": "MP-TABCDE",
+				"key": "MP-TABCDE",
 				"title":      "My Task",
 				"type":       "task",
 				"status":     "open",
@@ -142,7 +142,7 @@ func TestCloudStore_GetTask(t *testing.T) {
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-task",
-				"display_id": "MP-TABCDE",
+				"key": "MP-TABCDE",
 				"title":      "My Task",
 				"type":       "task",
 				"status":     "open",
@@ -166,7 +166,7 @@ func TestCloudStore_UpdateTask(t *testing.T) {
 			jsonResponse(w, 200, map[string]any{
 				"data": map[string]any{
 					"task_id":    "uuid-task",
-					"display_id": "MP-TABCDE",
+					"key": "MP-TABCDE",
 					"title":      "My Task",
 					"type":       "task",
 					"status":     "open",
@@ -187,7 +187,7 @@ func TestCloudStore_UpdateTask(t *testing.T) {
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-task",
-				"display_id": "MP-TABCDE",
+				"key": "MP-TABCDE",
 				"title":      "My Task",
 				"type":       "task",
 				"status":     "in_progress",
@@ -210,7 +210,7 @@ func TestCloudStore_UpdateTask_EpicStatusRejected(t *testing.T) {
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-epic",
-				"display_id": "MP-TEPIC1",
+				"key": "MP-TEPIC1",
 				"title":      "My Epic",
 				"type":       "epic",
 				"status":     "open",
@@ -244,8 +244,8 @@ func TestCloudStore_ListTasks(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/projects/MP/tasks")
 		jsonResponse(w, 200, map[string]any{
 			"data": []map[string]any{
-				{"task_id": "uuid-1", "display_id": "MP-T00001", "title": "T1", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
-				{"task_id": "uuid-2", "display_id": "MP-T00002", "title": "T2", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
+				{"task_id": "uuid-1", "key": "MP-T00001", "title": "T1", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
+				{"task_id": "uuid-2", "key": "MP-T00002", "title": "T2", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
 			},
 		})
 	})
@@ -262,7 +262,7 @@ func TestCloudStore_ReadyTasks(t *testing.T) {
 		assert.Equal(t, "/projects/MP/tasks/ready", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
 			"data": []map[string]any{
-				{"task_id": "uuid-1", "display_id": "MP-T00001", "title": "Ready Task", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
+				{"task_id": "uuid-1", "key": "MP-T00001", "title": "Ready Task", "type": "task", "status": "open", "body": "", "created_at": "2026-01-01T00:00:00Z"},
 			},
 		})
 	})
@@ -282,7 +282,7 @@ func TestCloudStore_CreateDocument(t *testing.T) {
 		jsonResponse(w, 201, map[string]any{
 			"data": map[string]any{
 				"document_id": "uuid-doc",
-				"display_id":  "MP-DABCDE",
+				"key":  "MP-DABCDE",
 				"title":       "My Doc",
 				"body":        "doc body",
 				"created_at":  "2026-01-01T00:00:00Z",
@@ -336,7 +336,7 @@ func TestCloudStore_CheckoutTask(t *testing.T) {
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"task_id":    "uuid-task",
-				"display_id": "MP-TABCDE",
+				"key": "MP-TABCDE",
 				"title":      "My Task",
 				"type":       "task",
 				"status":     "open",
@@ -367,7 +367,7 @@ func TestCloudStore_CheckoutDocument(t *testing.T) {
 		jsonResponse(w, 200, map[string]any{
 			"data": map[string]any{
 				"document_id": "uuid-doc",
-				"display_id":  "MP-DABCDE",
+				"key":  "MP-DABCDE",
 				"title":       "My Doc",
 				"body":        "doc body",
 				"created_at":  "2026-01-01T00:00:00Z",
@@ -397,7 +397,7 @@ func TestCloudStore_CheckinTask(t *testing.T) {
 			jsonResponse(w, 200, map[string]any{
 				"data": map[string]any{
 					"task_id":    "uuid-task",
-					"display_id": "MP-TABCDE",
+					"key": "MP-TABCDE",
 					"title":      "Updated Title",
 					"type":       "task",
 					"status":     "open",

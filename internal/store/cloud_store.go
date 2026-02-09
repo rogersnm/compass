@@ -122,7 +122,7 @@ func (p *apiProject) toModel() *model.Project {
 
 type apiTask struct {
 	TaskID    string     `json:"task_id"`
-	DisplayID string     `json:"display_id"`
+	Key       string     `json:"key"`
 	Title     string     `json:"title"`
 	Type      string     `json:"type"`
 	Status    string     `json:"status"`
@@ -134,7 +134,7 @@ type apiTask struct {
 
 func (t *apiTask) toModel() *model.Task {
 	return &model.Task{
-		ID:        t.DisplayID,
+		ID:        t.Key,
 		Title:     t.Title,
 		Type:      model.TaskType(t.Type),
 		Status:    model.Status(t.Status),
@@ -146,7 +146,7 @@ func (t *apiTask) toModel() *model.Task {
 
 type apiDocument struct {
 	DocumentID string     `json:"document_id"`
-	DisplayID  string     `json:"display_id"`
+	Key        string     `json:"key"`
 	Title      string     `json:"title"`
 	Body       string     `json:"body"`
 	CreatedAt  time.Time  `json:"created_at"`
@@ -155,7 +155,7 @@ type apiDocument struct {
 
 func (d *apiDocument) toModel() *model.Document {
 	return &model.Document{
-		ID:        d.DisplayID,
+		ID:        d.Key,
 		Title:     d.Title,
 		CreatedAt: d.CreatedAt,
 		UpdatedAt: d.CreatedAt,
@@ -254,7 +254,7 @@ func (cs *CloudStore) CreateTask(title, projectID string, opts TaskCreateOpts) (
 		payload["priority"] = *opts.Priority
 	}
 	if opts.Epic != "" {
-		payload["epic_task_id"] = opts.Epic
+		payload["epic_key"] = opts.Epic
 	}
 	if opts.Body != "" {
 		payload["body"] = opts.Body

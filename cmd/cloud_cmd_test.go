@@ -168,7 +168,7 @@ func (f *fakeAPI) handleCreateTask(w http.ResponseWriter, r *http.Request, projI
 	}
 	t := map[string]any{
 		"task_id":    "uuid-task-" + displayID,
-		"display_id": displayID,
+		"key": displayID,
 		"title":      body["title"],
 		"type":       taskType,
 		"status":     "open",
@@ -259,7 +259,7 @@ func (f *fakeAPI) handleCreateDocument(w http.ResponseWriter, r *http.Request, p
 	displayID := projID + "-DDOC0" + string(rune('0'+f.docSeq))
 	d := map[string]any{
 		"document_id": "uuid-doc-" + displayID,
-		"display_id":  displayID,
+		"key":  displayID,
 		"title":       body["title"],
 		"body":        body["body"],
 		"project":     projID,
@@ -581,7 +581,7 @@ func TestCloud_TaskList(t *testing.T) {
 		"body": "", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -594,7 +594,7 @@ func TestCloud_TaskShow(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "task body", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -607,7 +607,7 @@ func TestCloud_TaskStart(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -624,7 +624,7 @@ func TestCloud_TaskClose(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -641,7 +641,7 @@ func TestCloud_TaskDelete(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -662,7 +662,7 @@ func TestCloud_TaskReady(t *testing.T) {
 		"body": "", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Ready Task",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Ready Task",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -693,7 +693,7 @@ func TestCloud_DocShow(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "display_id": "CP-DDOC01", "title": "My Doc",
+		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "My Doc",
 		"body": "doc body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.mu.Unlock()
@@ -705,7 +705,7 @@ func TestCloud_DocDelete(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "display_id": "CP-DDOC01", "title": "My Doc",
+		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "My Doc",
 		"body": "", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.mu.Unlock()
@@ -723,7 +723,7 @@ func TestCloud_TaskCheckout(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Checkout Task",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Checkout Task",
 		"type": "task", "status": "open", "body": "task body", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -742,7 +742,7 @@ func TestCloud_TaskCheckin(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Checkin Task",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Checkin Task",
 		"type": "task", "status": "open", "body": "original body", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -766,7 +766,7 @@ func TestCloud_DocCheckout(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "display_id": "CP-DDOC01", "title": "Checkout Doc",
+		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "Checkout Doc",
 		"body": "doc body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.mu.Unlock()
@@ -784,7 +784,7 @@ func TestCloud_DocCheckin(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "display_id": "CP-DDOC01", "title": "Checkin Doc",
+		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "Checkin Doc",
 		"body": "original body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.mu.Unlock()
@@ -809,7 +809,7 @@ func TestCloud_Search(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Auth Task",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Auth Task",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -868,7 +868,7 @@ func TestCloud_TaskUpdate_Priority(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"priority": nil, "created_at": "2026-01-01T00:00:00Z",
 	}
@@ -885,7 +885,7 @@ func TestCloud_TaskUpdate_Status(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "Task 1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -908,12 +908,12 @@ func TestCloud_TaskReady_All(t *testing.T) {
 		"body": "", "created_at": "2026-01-01T00:00:00Z",
 	}
 	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "display_id": "CP-TTEST1", "title": "T1",
+		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "T1",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
 	api.tasks["CP-TTEST2"] = map[string]any{
-		"task_id": "uuid-2", "display_id": "CP-TTEST2", "title": "T2",
+		"task_id": "uuid-2", "key": "CP-TTEST2", "title": "T2",
 		"type": "task", "status": "open", "body": "", "project": "CP",
 		"created_at": "2026-01-01T00:00:00Z",
 	}
