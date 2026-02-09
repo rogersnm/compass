@@ -259,6 +259,9 @@ func (cs *CloudStore) CreateTask(title, projectID string, opts TaskCreateOpts) (
 	if opts.Body != "" {
 		payload["body"] = opts.Body
 	}
+	if len(opts.DependsOn) > 0 {
+		payload["depends_on"] = opts.DependsOn
+	}
 
 	resp, err := cs.doJSON("POST", "/projects/"+url.PathEscape(projectID)+"/tasks", payload)
 	if err != nil {
@@ -367,6 +370,9 @@ func (cs *CloudStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, er
 	}
 	if upd.Body != nil {
 		payload["body"] = *upd.Body
+	}
+	if upd.DependsOn != nil {
+		payload["depends_on"] = *upd.DependsOn
 	}
 
 	resp, err := cs.doJSON("PATCH", "/tasks/"+url.PathEscape(taskID), payload)
