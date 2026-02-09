@@ -60,13 +60,18 @@ func (s *LocalStore) CreateTask(title, projectID string, opts TaskCreateOpts) (*
 		return nil, err
 	}
 
+	var status model.Status
+	if taskType != model.TypeEpic {
+		status = model.StatusOpen
+	}
+
 	t := &model.Task{
 		ID:        tid,
 		Title:     title,
 		Type:      taskType,
 		Project:   projectID,
 		Epic:      opts.Epic,
-		Status:    model.StatusOpen,
+		Status:    status,
 		Priority:  opts.Priority,
 		DependsOn: opts.DependsOn,
 		CreatedBy: currentUser(),
@@ -151,6 +156,11 @@ func (s *LocalStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, err
 
 	if upd.Status != nil && t.Type == model.TypeEpic {
 		return nil, fmt.Errorf("cannot update epic status: epic status is computed from child tasks")
+	}
+
+	// Clear any legacy stored status on epics before applying updates.
+	if t.Type == model.TypeEpic {
+		t.Status = ""
 	}
 
 	if upd.Title != nil {

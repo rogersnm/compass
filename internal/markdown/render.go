@@ -16,7 +16,7 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	labelStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	openStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	openStyle   = lipgloss.NewStyle()
 	inProgStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	closedSty   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	blockedSty  = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))

@@ -142,6 +142,10 @@ func (s *LocalStore) CheckinTask(localPath string) (*model.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)
 	}
+	// Clear any legacy stored status on epics.
+	if t.Type == model.TypeEpic {
+		t.Status = ""
+	}
 	if err := t.Validate(); err != nil {
 		return nil, err
 	}

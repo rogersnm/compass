@@ -269,7 +269,7 @@ func TestCreateTask_EpicType(t *testing.T) {
 	epic, err := s.CreateTask("Auth Epic", p.ID, TaskCreateOpts{Type: model.TypeEpic})
 	require.NoError(t, err)
 	assert.Equal(t, model.TypeEpic, epic.Type)
-	assert.Equal(t, model.StatusOpen, epic.Status)
+	assert.Empty(t, epic.Status)
 }
 
 func TestCreateTask_WithEpic(t *testing.T) {

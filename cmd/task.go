@@ -81,6 +81,36 @@ var taskListCmd = &cobra.Command{
 		}
 
 		allTasks, _ := st.AllTaskMap(projectID)
+
+		// Post-filter epics by computed status when a status filter is active.
+		// ListTasks filters on stored status, but epic status is computed.
+		if statusStr != "" && typeStr != "task" {
+			// Fetch all epics (no status filter) to evaluate computed status
+			epicFilter := store.TaskFilter{
+				ProjectID: projectID,
+				EpicID:    epicID,
+				Type:      model.TypeEpic,
+			}
+			allEpics, _ := st.ListTasks(epicFilter)
+
+			// Remove epics from results (they matched on stored status, not computed)
+			filtered := tasks[:0]
+			for _, t := range tasks {
+				if t.Type != model.TypeEpic {
+					filtered = append(filtered, t)
+				}
+			}
+
+			// Add epics whose computed status matches the filter
+			for _, epic := range allEpics {
+				children := model.ChildrenOf(epic.ID, allTasks)
+				if model.ComputeEpicStatus(children) == model.Status(statusStr) {
+					filtered = append(filtered, epic)
+				}
+			}
+			tasks = filtered
+		}
+
 		fmt.Println(markdown.RenderTaskTable(tasks, allTasks))
 		return nil
 	},

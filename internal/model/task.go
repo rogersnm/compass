@@ -18,7 +18,7 @@ type Task struct {
 	Type      TaskType `yaml:"type"`
 	Project   string   `yaml:"project"`
 	Epic      string   `yaml:"epic,omitempty"`
-	Status    Status   `yaml:"status"`
+	Status    Status   `yaml:"status,omitempty"`
 	Priority  *int     `yaml:"priority,omitempty"`
 	DependsOn []string `yaml:"depends_on,omitempty"`
 	CreatedBy string   `yaml:"created_by"`
@@ -39,8 +39,14 @@ func (t *Task) Validate() error {
 	if t.Type != TypeTask && t.Type != TypeEpic {
 		return fmt.Errorf("invalid task type %q: must be task or epic", t.Type)
 	}
-	if err := ValidateStatus(t.Status); err != nil {
-		return err
+	if t.Type == TypeEpic {
+		if t.Status != "" {
+			return fmt.Errorf("epic-type tasks must not have a stored status (status is computed)")
+		}
+	} else {
+		if err := ValidateStatus(t.Status); err != nil {
+			return err
+		}
 	}
 	if t.Priority != nil && (*t.Priority < 0 || *t.Priority > 3) {
 		return fmt.Errorf("invalid priority %d: must be 0-3", *t.Priority)

@@ -39,14 +39,20 @@ func TestTask_Validate_InvalidType(t *testing.T) {
 }
 
 func TestTask_Validate_EpicType(t *testing.T) {
-	task := &Task{ID: "TEST-TABCDE", Title: "Test", Project: "TEST", Type: TypeEpic, Status: StatusOpen}
+	task := &Task{ID: "TEST-TABCDE", Title: "Test", Project: "TEST", Type: TypeEpic}
 	assert.NoError(t, task.Validate())
+}
+
+func TestTask_Validate_EpicRejectsStoredStatus(t *testing.T) {
+	task := &Task{ID: "TEST-TABCDE", Title: "Test", Project: "TEST", Type: TypeEpic, Status: StatusOpen}
+	assert.Error(t, task.Validate())
+	assert.Contains(t, task.Validate().Error(), "must not have a stored status")
 }
 
 func TestTask_Validate_EpicCannotHaveDeps(t *testing.T) {
 	task := &Task{
 		ID: "TEST-TABCDE", Title: "Test", Project: "TEST",
-		Type: TypeEpic, Status: StatusOpen, DependsOn: []string{"TEST-T22222"},
+		Type: TypeEpic, DependsOn: []string{"TEST-T22222"},
 	}
 	assert.Error(t, task.Validate())
 	assert.Contains(t, task.Validate().Error(), "epic-type tasks cannot have dependencies")
