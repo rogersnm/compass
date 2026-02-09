@@ -49,12 +49,12 @@ func RenderTaskTable(tasks []model.Task, allTasks map[string]*model.Task) string
 	})
 	rows := make([][]string, len(tasks))
 	for i, t := range tasks {
-		displayStatus := t.Status
+		var status string
 		if t.Type == model.TypeEpic {
-			children := model.ChildrenOf(t.ID, allTasks)
-			displayStatus = model.ComputeEpicStatus(children)
+			status = "N/A"
+		} else {
+			status = RenderStatus(string(t.Status), t.IsBlocked(allTasks))
 		}
-		status := RenderStatus(string(displayStatus), t.IsBlocked(allTasks))
 		rows[i] = []string{t.ID, t.Title, string(t.Type), model.FormatPriority(t.Priority), status, t.Project}
 	}
 	return renderTable([]string{"ID", "Title", "Type", "Pri", "Status", "Project"}, rows)

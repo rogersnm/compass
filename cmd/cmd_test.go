@@ -217,7 +217,7 @@ func TestTaskStart_EpicRejected(t *testing.T) {
 
 	err := run(t, "task", "start", epic.ID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "epic status is computed")
+	assert.Contains(t, err.Error(), "epics do not have a status")
 }
 
 func TestTaskClose_EpicRejected(t *testing.T) {
@@ -227,7 +227,7 @@ func TestTaskClose_EpicRejected(t *testing.T) {
 
 	err := run(t, "task", "close", epic.ID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "epic status is computed")
+	assert.Contains(t, err.Error(), "epics do not have a status")
 }
 
 func TestTaskUpdate_EpicStatusRejected(t *testing.T) {
@@ -237,7 +237,7 @@ func TestTaskUpdate_EpicStatusRejected(t *testing.T) {
 
 	err := run(t, "task", "update", epic.ID, "--status", "in_progress")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "epic status is computed")
+	assert.Contains(t, err.Error(), "epics do not have a status")
 }
 
 func TestTaskReady(t *testing.T) {

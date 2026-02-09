@@ -434,7 +434,7 @@ func TestUpdateTask_EpicStatusRejected(t *testing.T) {
 	status := model.StatusInProgress
 	_, err := s.UpdateTask(epic.ID, TaskUpdate{Status: &status})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "epic status is computed")
+	assert.Contains(t, err.Error(), "epics do not have a status")
 }
 
 func TestUpdateTask_EpicNonStatusAllowed(t *testing.T) {

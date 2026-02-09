@@ -80,37 +80,18 @@ var taskListCmd = &cobra.Command{
 			return err
 		}
 
-		allTasks, _ := st.AllTaskMap(projectID)
-
-		// Post-filter epics by computed status when a status filter is active.
-		// ListTasks filters on stored status, but epic status is computed.
-		if statusStr != "" && typeStr != "task" {
-			// Fetch all epics (no status filter) to evaluate computed status
-			epicFilter := store.TaskFilter{
-				ProjectID: projectID,
-				EpicID:    epicID,
-				Type:      model.TypeEpic,
-			}
-			allEpics, _ := st.ListTasks(epicFilter)
-
-			// Remove epics from results (they matched on stored status, not computed)
+		// Exclude epics when filtering by status (epics have no status).
+		if statusStr != "" {
 			filtered := tasks[:0]
 			for _, t := range tasks {
 				if t.Type != model.TypeEpic {
 					filtered = append(filtered, t)
 				}
 			}
-
-			// Add epics whose computed status matches the filter
-			for _, epic := range allEpics {
-				children := model.ChildrenOf(epic.ID, allTasks)
-				if model.ComputeEpicStatus(children) == model.Status(statusStr) {
-					filtered = append(filtered, epic)
-				}
-			}
 			tasks = filtered
 		}
 
+		allTasks, _ := st.AllTaskMap(projectID)
 		fmt.Println(markdown.RenderTaskTable(tasks, allTasks))
 		return nil
 	},
@@ -153,17 +134,18 @@ var taskShowCmd = &cobra.Command{
 		allTasks, _ := st.AllTaskMap(t.Project)
 		blocked := t.IsBlocked(allTasks)
 
-		displayStatus := t.Status
+		var statusDisplay string
 		if t.Type == model.TypeEpic {
-			children := model.ChildrenOf(t.ID, allTasks)
-			displayStatus = model.ComputeEpicStatus(children)
+			statusDisplay = "N/A"
+		} else {
+			statusDisplay = markdown.RenderStatus(string(t.Status), blocked)
 		}
 
 		fields := []string{
 			markdown.RenderField("ID", t.ID),
 			markdown.RenderField("Type", string(t.Type)),
 			markdown.RenderField("Project", t.Project),
-			markdown.RenderField("Status", markdown.RenderStatus(string(displayStatus), blocked)),
+			markdown.RenderField("Status", statusDisplay),
 		}
 		if t.Priority != nil {
 			fields = append(fields, markdown.RenderField("Priority", model.FormatPriority(t.Priority)))

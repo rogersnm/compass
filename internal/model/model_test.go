@@ -46,7 +46,7 @@ func TestTask_Validate_EpicType(t *testing.T) {
 func TestTask_Validate_EpicRejectsStoredStatus(t *testing.T) {
 	task := &Task{ID: "TEST-TABCDE", Title: "Test", Project: "TEST", Type: TypeEpic, Status: StatusOpen}
 	assert.Error(t, task.Validate())
-	assert.Contains(t, task.Validate().Error(), "must not have a stored status")
+	assert.Contains(t, task.Validate().Error(), "must not have a status")
 }
 
 func TestTask_Validate_EpicCannotHaveDeps(t *testing.T) {
@@ -72,45 +72,6 @@ func TestTask_Validate_DuplicateDeps(t *testing.T) {
 		Type: TypeTask, Status: StatusOpen, DependsOn: []string{"TEST-T22222", "TEST-T22222"},
 	}
 	assert.Error(t, task.Validate())
-}
-
-// --- ComputeEpicStatus tests ---
-
-func TestComputeEpicStatus_NoChildren(t *testing.T) {
-	assert.Equal(t, StatusClosed, ComputeEpicStatus(nil))
-}
-
-func TestComputeEpicStatus_AllOpen(t *testing.T) {
-	children := []*Task{
-		{Status: StatusOpen},
-		{Status: StatusOpen},
-	}
-	assert.Equal(t, StatusOpen, ComputeEpicStatus(children))
-}
-
-func TestComputeEpicStatus_AnyInProgress(t *testing.T) {
-	children := []*Task{
-		{Status: StatusOpen},
-		{Status: StatusInProgress},
-		{Status: StatusClosed},
-	}
-	assert.Equal(t, StatusInProgress, ComputeEpicStatus(children))
-}
-
-func TestComputeEpicStatus_AllClosed(t *testing.T) {
-	children := []*Task{
-		{Status: StatusClosed},
-		{Status: StatusClosed},
-	}
-	assert.Equal(t, StatusClosed, ComputeEpicStatus(children))
-}
-
-func TestComputeEpicStatus_MixOpenClosed(t *testing.T) {
-	children := []*Task{
-		{Status: StatusOpen},
-		{Status: StatusClosed},
-	}
-	assert.Equal(t, StatusOpen, ComputeEpicStatus(children))
 }
 
 // --- ChildrenOf tests ---

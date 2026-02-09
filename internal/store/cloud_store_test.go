@@ -224,7 +224,7 @@ func TestCloudStore_UpdateTask_EpicStatusRejected(t *testing.T) {
 	s := model.StatusInProgress
 	_, err := cs.UpdateTask("MP-TEPIC1", TaskUpdate{Status: &s})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "epic status is computed")
+	assert.Contains(t, err.Error(), "epics do not have a status")
 }
 
 func TestCloudStore_DeleteTask(t *testing.T) {

@@ -155,7 +155,7 @@ func (s *LocalStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, err
 	}
 
 	if upd.Status != nil && t.Type == model.TypeEpic {
-		return nil, fmt.Errorf("cannot update epic status: epic status is computed from child tasks")
+		return nil, fmt.Errorf("cannot change epic status: epics do not have a status")
 	}
 
 	// Clear any legacy stored status on epics before applying updates.

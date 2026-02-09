@@ -41,7 +41,7 @@ func (t *Task) Validate() error {
 	}
 	if t.Type == TypeEpic {
 		if t.Status != "" {
-			return fmt.Errorf("epic-type tasks must not have a stored status (status is computed)")
+			return fmt.Errorf("epic-type tasks must not have a status")
 		}
 	} else {
 		if err := ValidateStatus(t.Status); err != nil {
@@ -84,27 +84,6 @@ func ChildrenOf(epicID string, allTasks map[string]*Task) []*Task {
 		}
 	}
 	return children
-}
-
-// ComputeEpicStatus derives an epic's status from its children.
-// No children or all closed: closed. Any in_progress: in_progress. All open: open.
-func ComputeEpicStatus(children []*Task) Status {
-	if len(children) == 0 {
-		return StatusClosed
-	}
-	allClosed := true
-	for _, c := range children {
-		if c.Status == StatusInProgress {
-			return StatusInProgress
-		}
-		if c.Status != StatusClosed {
-			allClosed = false
-		}
-	}
-	if allClosed {
-		return StatusClosed
-	}
-	return StatusOpen
 }
 
 // IsBlocked returns true if any dependency is not closed.

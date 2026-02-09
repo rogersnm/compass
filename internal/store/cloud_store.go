@@ -351,7 +351,7 @@ func (cs *CloudStore) UpdateTask(taskID string, upd TaskUpdate) (*model.Task, er
 			return nil, err
 		}
 		if t.Type == model.TypeEpic {
-			return nil, fmt.Errorf("cannot update epic status: epic status is computed from child tasks")
+			return nil, fmt.Errorf("cannot change epic status: epics do not have a status")
 		}
 	}
 

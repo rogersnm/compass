@@ -47,7 +47,7 @@ Tasks have a DAG of dependencies via `depends_on`. Epic-type tasks cannot have d
 
 "Blocked" is computed, not stored: a task is blocked if any dependency is not closed.
 
-Epic status is computed, not stored: derived from child tasks via `model.ComputeEpicStatus()`. No children or all closed = `closed`, all open = `open`, any `in_progress` = `in_progress`. Epics must not have a `status` field in frontmatter. Status-changing commands (`task start`, `task close`, `task update --status`) are rejected on epics.
+Epics have no status. They must not have a `status` field in frontmatter, display "N/A" in listings, and are excluded from status filtering. Status-changing commands (`task start`, `task close`, `task update --status`) are rejected on epics.
 
 ### Package responsibilities
 
