@@ -91,14 +91,23 @@ var taskShowCmd = &cobra.Command{
 	Short: "Show task details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		raw, _ := cmd.Flags().GetBool("raw")
-		noColor, _ := cmd.Flags().GetBool("no-color")
-		if raw || noColor {
+		pretty, _ := cmd.Flags().GetBool("pretty")
+		if !pretty {
 			path, err := st.ResolveEntityPath(args[0])
+			if err == nil {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				fmt.Print(string(data))
+				return nil
+			}
+			// Cloud mode: marshal from API response
+			t, body, err := st.GetTask(args[0])
 			if err != nil {
 				return err
 			}
-			data, err := os.ReadFile(path)
+			data, err := markdown.Marshal(t, body)
 			if err != nil {
 				return err
 			}
@@ -380,9 +389,7 @@ func init() {
 	taskCreateCmd.Flags().IntP("priority", "p", -1, "priority (0=P0 critical, 1=P1 high, 2=P2 medium, 3=P3 low)")
 	taskCreateCmd.Flags().String("depends-on", "", "comma-separated task IDs")
 
-	taskShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
-	taskShowCmd.Flags().Bool("no-color", false, "alias for --raw")
-	taskShowCmd.Flags().Lookup("no-color").Hidden = true
+	taskShowCmd.Flags().Bool("pretty", false, "render with ANSI styling")
 
 	taskListCmd.Flags().StringP("project", "P", "", "filter by project")
 	taskListCmd.Flags().StringP("epic", "e", "", "filter by epic")

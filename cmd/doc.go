@@ -55,14 +55,23 @@ var docShowCmd = &cobra.Command{
 	Short: "Show document details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		raw, _ := cmd.Flags().GetBool("raw")
-		noColor, _ := cmd.Flags().GetBool("no-color")
-		if raw || noColor {
+		pretty, _ := cmd.Flags().GetBool("pretty")
+		if !pretty {
 			path, err := st.ResolveEntityPath(args[0])
+			if err == nil {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				fmt.Print(string(data))
+				return nil
+			}
+			// Cloud mode: marshal from API response
+			d, body, err := st.GetDocument(args[0])
 			if err != nil {
 				return err
 			}
-			data, err := os.ReadFile(path)
+			data, err := markdown.Marshal(d, body)
 			if err != nil {
 				return err
 			}
@@ -188,9 +197,7 @@ var docCheckinCmd = &cobra.Command{
 
 func init() {
 	docCreateCmd.Flags().StringP("project", "P", "", "project ID")
-	docShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
-	docShowCmd.Flags().Bool("no-color", false, "alias for --raw")
-	docShowCmd.Flags().Lookup("no-color").Hidden = true
+	docShowCmd.Flags().Bool("pretty", false, "render with ANSI styling")
 	docListCmd.Flags().StringP("project", "P", "", "filter by project")
 	docUpdateCmd.Flags().String("title", "", "new title")
 	docDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")

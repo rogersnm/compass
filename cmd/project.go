@@ -51,14 +51,23 @@ var projectShowCmd = &cobra.Command{
 	Short: "Show project details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		raw, _ := cmd.Flags().GetBool("raw")
-		noColor, _ := cmd.Flags().GetBool("no-color")
-		if raw || noColor {
+		pretty, _ := cmd.Flags().GetBool("pretty")
+		if !pretty {
 			path, err := st.ResolveEntityPath(args[0])
+			if err == nil {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				fmt.Print(string(data))
+				return nil
+			}
+			// Cloud mode: marshal from API response
+			p, body, err := st.GetProject(args[0])
 			if err != nil {
 				return err
 			}
-			data, err := os.ReadFile(path)
+			data, err := markdown.Marshal(p, body)
 			if err != nil {
 				return err
 			}
@@ -204,9 +213,7 @@ var projectUnlinkCmd = &cobra.Command{
 
 func init() {
 	projectCreateCmd.Flags().StringP("key", "k", "", "project key (2-5 uppercase alphanumeric chars)")
-	projectShowCmd.Flags().Bool("raw", false, "output raw markdown file (no ANSI styling)")
-	projectShowCmd.Flags().Bool("no-color", false, "alias for --raw")
-	projectShowCmd.Flags().Lookup("no-color").Hidden = true
+	projectShowCmd.Flags().Bool("pretty", false, "render with ANSI styling")
 	projectDeleteCmd.Flags().BoolP("force", "f", false, "skip confirmation")
 
 	projectCmd.AddCommand(projectCreateCmd)
