@@ -13,6 +13,12 @@ var (
 	cellStyle      = lipgloss.NewStyle()
 )
 
+// ProjectRow pairs a project with its store name for multi-store display.
+type ProjectRow struct {
+	Project   model.Project
+	StoreName string
+}
+
 func RenderProjectTable(projects []model.Project) string {
 	if len(projects) == 0 {
 		return "No projects found."
@@ -22,6 +28,20 @@ func RenderProjectTable(projects []model.Project) string {
 		rows[i] = []string{p.ID, p.Name, p.CreatedAt.Format("2006-01-02")}
 	}
 	return renderTable([]string{"ID", "Name", "Created"}, rows)
+}
+
+func RenderProjectTableWithStores(projectRows []ProjectRow) string {
+	if len(projectRows) == 0 {
+		return "No projects found."
+	}
+	sort.Slice(projectRows, func(i, j int) bool {
+		return projectRows[i].Project.ID < projectRows[j].Project.ID
+	})
+	rows := make([][]string, len(projectRows))
+	for i, r := range projectRows {
+		rows[i] = []string{r.Project.ID, r.Project.Name, r.StoreName, r.Project.CreatedAt.Format("2006-01-02")}
+	}
+	return renderTable([]string{"ID", "Name", "Store", "Created"}, rows)
 }
 
 func RenderDocumentTable(docs []model.Document) string {
@@ -58,6 +78,13 @@ func RenderTaskTable(tasks []model.Task, allTasks map[string]*model.Task) string
 		rows[i] = []string{t.ID, t.Title, string(t.Type), model.FormatPriority(t.Priority), status, t.Project}
 	}
 	return renderTable([]string{"ID", "Title", "Type", "Pri", "Status", "Project"}, rows)
+}
+
+func RenderStoreTable(rows [][]string) string {
+	if len(rows) == 0 {
+		return "No stores configured."
+	}
+	return renderTable([]string{"Store", "Default"}, rows)
 }
 
 func renderTable(headers []string, rows [][]string) string {
