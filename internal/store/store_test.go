@@ -725,15 +725,15 @@ func TestSearch_NoResults(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-// --- Checkout/Checkin tests ---
+// --- Download/Upload tests ---
 
-func TestCheckoutEntity_Task(t *testing.T) {
+func TestDownloadEntity_Task(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("My Task", p.ID, TaskCreateOpts{Body: "task body"})
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	localPath, err := s.DownloadEntity(task.ID, destDir)
 	require.NoError(t, err)
 	assert.FileExists(t, localPath)
 	assert.Contains(t, localPath, task.ID+".md")
@@ -746,13 +746,13 @@ func TestCheckoutEntity_Task(t *testing.T) {
 	assert.Equal(t, "task body", body)
 }
 
-func TestCheckoutEntity_Document(t *testing.T) {
+func TestDownloadEntity_Document(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	localPath, err := s.DownloadEntity(doc.ID, destDir)
 	require.NoError(t, err)
 	assert.FileExists(t, localPath)
 
@@ -762,19 +762,19 @@ func TestCheckoutEntity_Document(t *testing.T) {
 	assert.Equal(t, "doc body", body)
 }
 
-func TestCheckoutEntity_NotFound(t *testing.T) {
+func TestDownloadEntity_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.CheckoutEntity("ZZZZ-TZZZZZ", t.TempDir())
+	_, err := s.DownloadEntity("ZZZZ-TZZZZZ", t.TempDir())
 	assert.Error(t, err)
 }
 
-func TestCheckinTask_RoundTrip(t *testing.T) {
+func TestUploadTask_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Original", p.ID, TaskCreateOpts{Body: "old body"})
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	localPath, err := s.DownloadEntity(task.ID, destDir)
 	require.NoError(t, err)
 
 	// Modify the local file: change the body
@@ -782,8 +782,8 @@ func TestCheckinTask_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.WriteEntity(localPath, &modified, "new body"))
 
-	// Checkin
-	result, err := s.CheckinTask(localPath)
+	// Upload
+	result, err := s.UploadTask(localPath)
 	require.NoError(t, err)
 	assert.Equal(t, task.ID, result.ID)
 
@@ -796,13 +796,13 @@ func TestCheckinTask_RoundTrip(t *testing.T) {
 	assert.Equal(t, "new body", body)
 }
 
-func TestCheckinDocument_RoundTrip(t *testing.T) {
+func TestUploadDocument_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("Original", p.ID, "old body")
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	localPath, err := s.DownloadEntity(doc.ID, destDir)
 	require.NoError(t, err)
 
 	// Modify the local file
@@ -811,8 +811,8 @@ func TestCheckinDocument_RoundTrip(t *testing.T) {
 	modified.Title = "Updated Title"
 	require.NoError(t, s.WriteEntity(localPath, &modified, "new body"))
 
-	// Checkin
-	result, err := s.CheckinDocument(localPath)
+	// Upload
+	result, err := s.UploadDocument(localPath)
 	require.NoError(t, err)
 	assert.Equal(t, doc.ID, result.ID)
 
@@ -826,13 +826,13 @@ func TestCheckinDocument_RoundTrip(t *testing.T) {
 	assert.Equal(t, "new body", body)
 }
 
-func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
+func TestUploadTask_InvalidFrontmatter(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	task, _ := s.CreateTask("Task", p.ID, TaskCreateOpts{})
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(task.ID, destDir)
+	localPath, err := s.DownloadEntity(task.ID, destDir)
 	require.NoError(t, err)
 
 	// Corrupt the file: clear the title to trigger validation error
@@ -841,7 +841,7 @@ func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
 	modified.Title = ""
 	require.NoError(t, s.WriteEntity(localPath, &modified, body))
 
-	_, err = s.CheckinTask(localPath)
+	_, err = s.UploadTask(localPath)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "title")
 
@@ -849,13 +849,13 @@ func TestCheckinTask_InvalidFrontmatter(t *testing.T) {
 	assert.FileExists(t, localPath)
 }
 
-func TestCheckinDocument_InvalidFrontmatter(t *testing.T) {
+func TestUploadDocument_InvalidFrontmatter(t *testing.T) {
 	s := newTestStore(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
 	doc, _ := s.CreateDocument("Doc", p.ID, "body")
 
 	destDir := t.TempDir()
-	localPath, err := s.CheckoutEntity(doc.ID, destDir)
+	localPath, err := s.DownloadEntity(doc.ID, destDir)
 	require.NoError(t, err)
 
 	// Clear the title
@@ -864,7 +864,7 @@ func TestCheckinDocument_InvalidFrontmatter(t *testing.T) {
 	modified.Title = ""
 	require.NoError(t, s.WriteEntity(localPath, &modified, body))
 
-	_, err = s.CheckinDocument(localPath)
+	_, err = s.UploadDocument(localPath)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "title")
 	assert.FileExists(t, localPath)

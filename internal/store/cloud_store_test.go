@@ -330,7 +330,7 @@ func TestCloudStore_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "Project not found")
 }
 
-func TestCloudStore_CheckoutTask(t *testing.T) {
+func TestCloudStore_DownloadTask(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/tasks/MP-TABCDE", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
@@ -348,7 +348,7 @@ func TestCloudStore_CheckoutTask(t *testing.T) {
 	defer srv.Close()
 
 	destDir := t.TempDir()
-	localPath, err := cs.CheckoutEntity("MP-TABCDE", destDir)
+	localPath, err := cs.DownloadEntity("MP-TABCDE", destDir)
 	require.NoError(t, err)
 	assert.FileExists(t, localPath)
 	assert.Contains(t, localPath, "MP-TABCDE.md")
@@ -361,7 +361,7 @@ func TestCloudStore_CheckoutTask(t *testing.T) {
 	assert.Equal(t, "task body content", body)
 }
 
-func TestCloudStore_CheckoutDocument(t *testing.T) {
+func TestCloudStore_DownloadDocument(t *testing.T) {
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/documents/MP-DABCDE", r.URL.Path)
 		jsonResponse(w, 200, map[string]any{
@@ -377,7 +377,7 @@ func TestCloudStore_CheckoutDocument(t *testing.T) {
 	defer srv.Close()
 
 	destDir := t.TempDir()
-	localPath, err := cs.CheckoutEntity("MP-DABCDE", destDir)
+	localPath, err := cs.DownloadEntity("MP-DABCDE", destDir)
 	require.NoError(t, err)
 	assert.FileExists(t, localPath)
 
@@ -387,7 +387,7 @@ func TestCloudStore_CheckoutDocument(t *testing.T) {
 	assert.Equal(t, "doc body", body)
 }
 
-func TestCloudStore_CheckinTask(t *testing.T) {
+func TestCloudStore_UploadTask(t *testing.T) {
 	var patchBody map[string]any
 	callCount := 0
 	cs, srv := newTestCloudStore(func(w http.ResponseWriter, r *http.Request) {
@@ -420,7 +420,7 @@ func TestCloudStore_CheckinTask(t *testing.T) {
 	localPath := destDir + "/MP-TABCDE.md"
 	require.NoError(t, cs.WriteEntity(localPath, task, "updated body"))
 
-	result, err := cs.CheckinTask(localPath)
+	result, err := cs.UploadTask(localPath)
 	require.NoError(t, err)
 	assert.Equal(t, "MP-TABCDE", result.ID)
 	assert.Equal(t, "Updated Title", patchBody["title"])

@@ -107,6 +107,7 @@ type apiProject struct {
 	Key       string     `json:"key"`
 	Name      string     `json:"name"`
 	Body      string     `json:"body"`
+	CreatedBy string     `json:"created_by"`
 	CreatedAt time.Time  `json:"created_at"`
 	DeletedAt *time.Time `json:"deleted_at"`
 }
@@ -115,6 +116,7 @@ func (p *apiProject) toModel() *model.Project {
 	return &model.Project{
 		ID:        p.Key,
 		Name:      p.Name,
+		CreatedBy: p.CreatedBy,
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.CreatedAt,
 	}
@@ -131,6 +133,7 @@ type apiTask struct {
 	DependsOn  []string   `json:"depends_on"`
 	ProjectKey string     `json:"project_key"`
 	Body       string     `json:"body"`
+	CreatedBy  string     `json:"created_by"`
 	CreatedAt  time.Time  `json:"created_at"`
 	DeletedAt  *time.Time `json:"deleted_at"`
 }
@@ -145,6 +148,7 @@ func (t *apiTask) toModel() *model.Task {
 		Priority:  t.Priority,
 		Epic:      t.EpicKey,
 		DependsOn: t.DependsOn,
+		CreatedBy: t.CreatedBy,
 		CreatedAt: t.CreatedAt,
 		UpdatedAt: t.CreatedAt,
 	}
@@ -155,6 +159,7 @@ type apiDocument struct {
 	Key        string     `json:"key"`
 	Title      string     `json:"title"`
 	Body       string     `json:"body"`
+	CreatedBy  string     `json:"created_by"`
 	CreatedAt  time.Time  `json:"created_at"`
 	DeletedAt  *time.Time `json:"deleted_at"`
 }
@@ -163,6 +168,7 @@ func (d *apiDocument) toModel() *model.Document {
 	return &model.Document{
 		ID:        d.Key,
 		Title:     d.Title,
+		CreatedBy: d.CreatedBy,
 		CreatedAt: d.CreatedAt,
 		UpdatedAt: d.CreatedAt,
 	}
@@ -574,7 +580,7 @@ func (cs *CloudStore) ResolveEntityPath(entityID string) (string, error) {
 	return "", fmt.Errorf("ResolveEntityPath not supported in cloud mode")
 }
 
-func (cs *CloudStore) CheckoutEntity(entityID, destDir string) (string, error) {
+func (cs *CloudStore) DownloadEntity(entityID, destDir string) (string, error) {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return "", fmt.Errorf("creating %s: %w", destDir, err)
 	}
@@ -609,7 +615,7 @@ func (cs *CloudStore) CheckoutEntity(entityID, destDir string) (string, error) {
 	return destPath, nil
 }
 
-func (cs *CloudStore) CheckinTask(localPath string) (*model.Task, error) {
+func (cs *CloudStore) UploadTask(localPath string) (*model.Task, error) {
 	t, body, err := ReadEntity[model.Task](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)
@@ -627,7 +633,7 @@ func (cs *CloudStore) CheckinTask(localPath string) (*model.Task, error) {
 	return updated, nil
 }
 
-func (cs *CloudStore) CheckinDocument(localPath string) (*model.Document, error) {
+func (cs *CloudStore) UploadDocument(localPath string) (*model.Document, error) {
 	d, body, err := ReadEntity[model.Document](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)

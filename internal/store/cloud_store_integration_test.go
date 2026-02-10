@@ -212,20 +212,20 @@ func TestIntegration_ReadyTasks(t *testing.T) {
 	assert.GreaterOrEqual(t, len(ready), 1)
 }
 
-func TestIntegration_CheckoutCheckin(t *testing.T) {
+func TestIntegration_DownloadUpload(t *testing.T) {
 	apiURL := getTestAPIURL(t)
 	apiKey := setupTestUser(t, apiURL)
 	cs := NewCloudStoreWithBase(apiURL, apiKey)
 
-	p, err := cs.CreateProject("Checkout Test", "CT", "")
+	p, err := cs.CreateProject("Download Test", "CT", "")
 	require.NoError(t, err)
 
-	task, err := cs.CreateTask("Checkout Task", p.ID, TaskCreateOpts{Body: "original body"})
+	task, err := cs.CreateTask("Download Task", p.ID, TaskCreateOpts{Body: "original body"})
 	require.NoError(t, err)
 
-	// Checkout
+	// Download
 	destDir := t.TempDir()
-	localPath, err := cs.CheckoutEntity(task.ID, destDir)
+	localPath, err := cs.DownloadEntity(task.ID, destDir)
 	require.NoError(t, err)
 	assert.FileExists(t, localPath)
 
@@ -239,8 +239,8 @@ func TestIntegration_CheckoutCheckin(t *testing.T) {
 	local.Title = "Modified Title"
 	require.NoError(t, cs.WriteEntity(localPath, &local, "modified body"))
 
-	// Checkin
-	result, err := cs.CheckinTask(localPath)
+	// Upload
+	result, err := cs.UploadTask(localPath)
 	require.NoError(t, err)
 	assert.Equal(t, "Modified Title", result.Title)
 

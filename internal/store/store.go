@@ -116,8 +116,8 @@ func (s *LocalStore) listProjectDirs() ([]string, error) {
 	return dirs, nil
 }
 
-// CheckoutEntity copies an entity's .md file to destDir/<ID>.md and returns the local path.
-func (s *LocalStore) CheckoutEntity(entityID, destDir string) (string, error) {
+// DownloadEntity copies an entity's .md file to destDir/<ID>.md and returns the local path.
+func (s *LocalStore) DownloadEntity(entityID, destDir string) (string, error) {
 	srcPath, err := s.ResolveEntityPath(entityID)
 	if err != nil {
 		return "", err
@@ -136,8 +136,8 @@ func (s *LocalStore) CheckoutEntity(entityID, destDir string) (string, error) {
 	return destPath, nil
 }
 
-// CheckinTask reads a local task file, validates it, writes it back to the store, and removes the local file.
-func (s *LocalStore) CheckinTask(localPath string) (*model.Task, error) {
+// UploadTask reads a local task file, validates it, writes it back to the store, and removes the local file.
+func (s *LocalStore) UploadTask(localPath string) (*model.Task, error) {
 	t, body, err := ReadEntity[model.Task](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)
@@ -166,8 +166,8 @@ func (s *LocalStore) CheckinTask(localPath string) (*model.Task, error) {
 	return &t, nil
 }
 
-// CheckinDocument reads a local document file, validates it, writes it back to the store, and removes the local file.
-func (s *LocalStore) CheckinDocument(localPath string) (*model.Document, error) {
+// UploadDocument reads a local document file, validates it, writes it back to the store, and removes the local file.
+func (s *LocalStore) UploadDocument(localPath string) (*model.Document, error) {
 	d, body, err := ReadEntity[model.Document](localPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading local file: %w", err)

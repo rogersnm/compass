@@ -32,9 +32,9 @@ type Store interface {
 
 	// Entity operations
 	ResolveEntityPath(entityID string) (string, error)
-	CheckoutEntity(entityID, destDir string) (string, error)
-	CheckinTask(localPath string) (*model.Task, error)
-	CheckinDocument(localPath string) (*model.Document, error)
+	DownloadEntity(entityID, destDir string) (string, error)
+	UploadTask(localPath string) (*model.Task, error)
+	UploadDocument(localPath string) (*model.Document, error)
 
 	// Low-level (used by commands for raw file access)
 	WriteEntity(path string, meta any, body string) error
