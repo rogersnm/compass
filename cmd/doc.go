@@ -25,9 +25,14 @@ var docCreateCmd = &cobra.Command{
 			return err
 		}
 
+		s, err := storeForProject(projectID)
+		if err != nil {
+			return err
+		}
+
 		body := readStdin()
 
-		d, err := st.CreateDocument(args[0], projectID, body)
+		d, err := s.CreateDocument(args[0], projectID, body)
 		if err != nil {
 			return err
 		}
@@ -41,7 +46,13 @@ var docListCmd = &cobra.Command{
 	Short: "List documents",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectID, _ := cmd.Flags().GetString("project")
-		docs, err := st.ListDocuments(projectID)
+
+		s, err := storeForProject(projectID)
+		if err != nil {
+			return err
+		}
+
+		docs, err := s.ListDocuments(projectID)
 		if err != nil {
 			return err
 		}
@@ -55,9 +66,14 @@ var docShowCmd = &cobra.Command{
 	Short: "Show document details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := storeForEntity(args[0])
+		if err != nil {
+			return err
+		}
+
 		pretty, _ := cmd.Flags().GetBool("pretty")
 		if !pretty {
-			path, err := st.ResolveEntityPath(args[0])
+			path, err := s.ResolveEntityPath(args[0])
 			if err == nil {
 				data, err := os.ReadFile(path)
 				if err != nil {
@@ -67,7 +83,7 @@ var docShowCmd = &cobra.Command{
 				return nil
 			}
 			// Cloud mode: marshal from API response
-			d, body, err := st.GetDocument(args[0])
+			d, body, err := s.GetDocument(args[0])
 			if err != nil {
 				return err
 			}
@@ -79,7 +95,7 @@ var docShowCmd = &cobra.Command{
 			return nil
 		}
 
-		d, body, err := st.GetDocument(args[0])
+		d, body, err := s.GetDocument(args[0])
 		if err != nil {
 			return err
 		}
@@ -107,6 +123,11 @@ var docUpdateCmd = &cobra.Command{
 	Short: "Update a document",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := storeForEntity(args[0])
+		if err != nil {
+			return err
+		}
+
 		var titlePtr, bodyPtr *string
 
 		if cmd.Flags().Changed("title") {
@@ -123,7 +144,7 @@ var docUpdateCmd = &cobra.Command{
 			return fmt.Errorf("at least one update is required (--title, stdin)")
 		}
 
-		d, err := st.UpdateDocument(args[0], titlePtr, bodyPtr)
+		d, err := s.UpdateDocument(args[0], titlePtr, bodyPtr)
 		if err != nil {
 			return err
 		}
@@ -137,7 +158,12 @@ var docDeleteCmd = &cobra.Command{
 	Short: "Delete a document",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		d, _, err := st.GetDocument(args[0])
+		s, err := storeForEntity(args[0])
+		if err != nil {
+			return err
+		}
+
+		d, _, err := s.GetDocument(args[0])
 		if err != nil {
 			return err
 		}
@@ -145,7 +171,7 @@ var docDeleteCmd = &cobra.Command{
 		if err := confirmDelete(cmd, d.ID); err != nil {
 			return err
 		}
-		if err := st.DeleteDocument(d.ID); err != nil {
+		if err := s.DeleteDocument(d.ID); err != nil {
 			return err
 		}
 		fmt.Printf("Deleted document %s\n", d.ID)
@@ -158,7 +184,11 @@ var docEditCmd = &cobra.Command{
 	Short: "Edit a document in $EDITOR",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := st.ResolveEntityPath(args[0])
+		s, err := storeForEntity(args[0])
+		if err != nil {
+			return err
+		}
+		path, err := s.ResolveEntityPath(args[0])
 		if err != nil {
 			return err
 		}
@@ -166,12 +196,16 @@ var docEditCmd = &cobra.Command{
 	},
 }
 
-var docCheckoutCmd = &cobra.Command{
-	Use:   "checkout <id>",
+var docDownloadCmd = &cobra.Command{
+	Use:   "download <id>",
 	Short: "Copy a document to .compass/ in the current directory for local editing",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := st.CheckoutEntity(args[0], ".compass")
+		s, err := storeForEntity(args[0])
+		if err != nil {
+			return err
+		}
+		path, err := s.DownloadEntity(args[0], ".compass")
 		if err != nil {
 			return err
 		}
@@ -180,17 +214,21 @@ var docCheckoutCmd = &cobra.Command{
 	},
 }
 
-var docCheckinCmd = &cobra.Command{
-	Use:   "checkin <id>",
+var docUploadCmd = &cobra.Command{
+	Use:   "upload <id>",
 	Short: "Write a locally edited document back to the store and remove the local copy",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		localPath := fmt.Sprintf(".compass/%s.md", args[0])
-		d, err := st.CheckinDocument(localPath)
+		s, err := storeForEntity(args[0])
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Checked in document %s\n", d.ID)
+		localPath := fmt.Sprintf(".compass/%s.md", args[0])
+		d, err := s.UploadDocument(localPath)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Uploaded document %s\n", d.ID)
 		return nil
 	},
 }
@@ -208,8 +246,8 @@ func init() {
 	docCmd.AddCommand(docUpdateCmd)
 	docCmd.AddCommand(docDeleteCmd)
 	docCmd.AddCommand(docEditCmd)
-	docCmd.AddCommand(docCheckoutCmd)
-	docCmd.AddCommand(docCheckinCmd)
+	docCmd.AddCommand(docDownloadCmd)
+	docCmd.AddCommand(docUploadCmd)
 	rootCmd.AddCommand(docCmd)
 }
 

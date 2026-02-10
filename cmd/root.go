@@ -22,7 +22,7 @@ import (
 var (
 	version = "dev"
 	dataDir string
-	st      store.Store
+	reg     *store.Registry
 	cfg     *config.Config
 )
 
@@ -49,17 +49,37 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		// Config commands work without a configured store
+		// Migrate v1 config to v2 on disk
+		if cfg.Version == 2 && cfg.Mode == "" && cfg.Cloud == nil {
+			// already v2, good
+		} else if cfg.Version < 2 && (cfg.Mode != "" || cfg.Cloud != nil || cfg.DefaultProject != "") {
+			// Migration happened in Load; persist it
+			if err := config.Save(dataDir, cfg); err != nil {
+				return fmt.Errorf("saving migrated config: %w", err)
+			}
+		}
+
+		// Build registry
+		reg = store.NewRegistry(cfg, dataDir)
+
+		if cfg.LocalEnabled {
+			reg.Add("local", store.NewLocal(dataDir))
+		}
+		for hostname, sc := range cfg.Stores {
+			reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+		}
+
+		// Store commands work without configured stores
+		if cmd.Name() == "store" || (cmd.Parent() != nil && cmd.Parent().Name() == "store") {
+			return nil
+		}
+		// Config commands (legacy, kept for backwards compat during transition)
 		if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
-			st = store.NewLocal(dataDir)
 			return nil
 		}
 
-		if cfg.Mode == "local" {
-			st = store.NewLocal(dataDir)
-		} else if cfg.Cloud != nil && cfg.Cloud.APIKey != "" {
-			st = store.NewCloudStore(cfg.Cloud.APIKey)
-		} else {
+		// First-run setup if no stores configured
+		if reg.IsEmpty() {
 			return runSetupPrompt(cmd)
 		}
 		return nil
@@ -87,18 +107,18 @@ func init() {
 					{Description: "Create doc with piped content", Command: "echo '# Design' | compass doc create \"Design Doc\" --project AUTH"},
 				},
 			},
-			"doc checkout": {
+			"doc download": {
 				Stdout: &mtp.IODescriptor{
 					ContentType: "text/plain",
-					Description: "Local file path where the document was checked out (e.g. .compass/AUTH-DXXXXX.md)",
+					Description: "Local file path where the document was downloaded. Use download+upload instead of piping to 'doc update' when you need to make surgical edits without rewriting the entire file.",
 				},
 				Examples: []mtp.Example{
-					{Description: "Checkout a document for local editing", Command: "compass doc checkout AUTH-DXXXXX"},
+					{Description: "Download a document for local editing", Command: "compass doc download AUTH-DXXXXX"},
 				},
 			},
-			"doc checkin": {
+			"doc upload": {
 				Examples: []mtp.Example{
-					{Description: "Check in a locally edited document", Command: "compass doc checkin AUTH-DXXXXX"},
+					{Description: "Upload a locally edited document", Command: "compass doc upload AUTH-DXXXXX"},
 				},
 			},
 			"doc update": {
@@ -123,7 +143,7 @@ func init() {
 					Description: "Markdown body content for the task",
 				},
 				Examples: []mtp.Example{
-					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project AUTH --epic AUTH-TXXXXX --depends-on AUTH-TAAAAA,AUTH-TBBBBB"},
+					{Description: "Create a task with dependencies", Command: "compass task create \"Login\" --project AUTH --parent-epic AUTH-TXXXXX --depends-on AUTH-TAAAAA,AUTH-TBBBBB"},
 					{Description: "Create an epic", Command: "compass task create \"Auth\" --project AUTH --type epic"},
 					{Description: "Create a high-priority task", Command: "compass task create \"Urgent fix\" --project AUTH --priority 0"},
 				},
@@ -165,18 +185,18 @@ func init() {
 					{Description: "Delete a task (skip confirm)", Command: "compass task delete AUTH-TXXXXX --force"},
 				},
 			},
-			"task checkout": {
+			"task download": {
 				Stdout: &mtp.IODescriptor{
 					ContentType: "text/plain",
-					Description: "Local file path where the task was checked out (e.g. .compass/AUTH-TXXXXX.md)",
+					Description: "Local file path where the task was downloaded. Use download+upload instead of piping to 'task update' when you need to make surgical edits without rewriting the entire file.",
 				},
 				Examples: []mtp.Example{
-					{Description: "Checkout a task for local editing", Command: "compass task checkout AUTH-TXXXXX"},
+					{Description: "Download a task for local editing", Command: "compass task download AUTH-TXXXXX"},
 				},
 			},
-			"task checkin": {
+			"task upload": {
 				Examples: []mtp.Example{
-					{Description: "Check in a locally edited task", Command: "compass task checkin AUTH-TXXXXX"},
+					{Description: "Upload a locally edited task", Command: "compass task upload AUTH-TXXXXX"},
 				},
 			},
 			"task list": {
@@ -200,6 +220,11 @@ func init() {
 					{Description: "Search across all entities", Command: "compass search \"authentication\""},
 				},
 			},
+			"project set-store": {
+				Examples: []mtp.Example{
+					{Description: "Reassign project to a different store", Command: "compass project set-store AUTH compasscloud.io"},
+				},
+			},
 			"project link": {
 				Examples: []mtp.Example{
 					{Description: "Link current directory to a project", Command: "compass project link AUTH"},
@@ -208,6 +233,36 @@ func init() {
 			"project unlink": {
 				Examples: []mtp.Example{
 					{Description: "Remove repo-local project link", Command: "compass project unlink"},
+				},
+			},
+			"store add": {
+				Examples: []mtp.Example{
+					{Description: "Enable local store", Command: "compass store add local"},
+					{Description: "Add cloud store", Command: "compass store add compasscloud.io"},
+					{Description: "Add cloud store with API key", Command: "compass store add compasscloud.io --api-key cpk_xxx"},
+				},
+			},
+			"store list": {
+				Stdout: &mtp.IODescriptor{
+					ContentType: "text/plain",
+					Description: "Table of configured stores with default indicator",
+				},
+			},
+			"store remove": {
+				Examples: []mtp.Example{
+					{Description: "Remove a store", Command: "compass store remove compasscloud.io"},
+					{Description: "Remove without confirmation", Command: "compass store remove compasscloud.io --force"},
+				},
+			},
+			"store set-default": {
+				Examples: []mtp.Example{
+					{Description: "Set default store for new projects", Command: "compass store set-default local"},
+				},
+			},
+			"store fetch": {
+				Examples: []mtp.Example{
+					{Description: "Fetch projects from all stores", Command: "compass store fetch"},
+					{Description: "Fetch from one store non-interactively", Command: "compass store fetch --store compasscloud.io --all"},
 				},
 			},
 		},
@@ -222,11 +277,11 @@ func Execute() error {
 
 const signupURL = "https://compasscloud.io/signup"
 
-// runSetupPrompt presents the interactive mode selection prompt.
+// runSetupPrompt presents the interactive first-run prompt.
 func runSetupPrompt(cmd *cobra.Command) error {
 	var choice string
 	err := huh.NewSelect[string]().
-		Title("Welcome to Compass!").
+		Title("Welcome to Compass! No stores configured.").
 		Options(
 			huh.NewOption("Log in to Compass Cloud", "login"),
 			huh.NewOption("Create an account at "+signupURL, "signup"),
@@ -235,133 +290,161 @@ func runSetupPrompt(cmd *cobra.Command) error {
 		Value(&choice).
 		Run()
 	if err != nil {
-		return fmt.Errorf("run 'compass config login' to get started")
+		return fmt.Errorf("run 'compass store add local' or 'compass store add <hostname>' to get started")
 	}
 
 	switch choice {
 	case "login":
 		fmt.Println()
-		return configLoginCmd.RunE(cmd, nil)
+		return runDeviceFlowLogin("compasscloud.io")
 	case "signup":
 		openBrowser(signupURL)
-		fmt.Println("Opening browser... after signing up, run: compass config login")
+		fmt.Println("Opening browser... after signing up, run: compass store add compasscloud.io")
 		return fmt.Errorf("setup incomplete")
 	case "local":
-		cfg.Mode = "local"
+		cfg.Version = 2
+		cfg.LocalEnabled = true
+		cfg.DefaultStore = "local"
 		if err := config.Save(dataDir, cfg); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
-		st = store.NewLocal(dataDir)
+		reg.Add("local", store.NewLocal(dataDir))
+		reg.SetDefault("local")
 		fmt.Println("Local mode enabled. Data will be stored in " + dataDir)
 		return nil
 	default:
-		return fmt.Errorf("run 'compass config login' to get started")
+		return fmt.Errorf("run 'compass store add local' or 'compass store add <hostname>' to get started")
 	}
 }
 
+// runDeviceFlowLogin performs the device flow login and saves the API key.
+func runDeviceFlowLogin(hostname string) error {
+	sc, ok := cfg.Stores[hostname]
+	if !ok {
+		sc = config.CloudStoreConfig{}
+	}
+	server := sc.URL(hostname)
+
+	resp, err := http.Post(server+"/auth/device", "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("requesting device code: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("device code request failed with status %d", resp.StatusCode)
+	}
+
+	var deviceResp struct {
+		Data struct {
+			DeviceCode      string `json:"device_code"`
+			UserCode        string `json:"user_code"`
+			VerificationURI string `json:"verification_uri"`
+			ExpiresIn       int    `json:"expires_in"`
+			Interval        int    `json:"interval"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
+		return fmt.Errorf("decoding device response: %w", err)
+	}
+	d := deviceResp.Data
+
+	verifyURL := d.VerificationURI
+	if verifyURL != "" && verifyURL[0] == '/' {
+		verifyURL = server + verifyURL
+	}
+	if d.UserCode != "" {
+		if strings.Contains(verifyURL, "?") {
+			verifyURL += "&user_code=" + d.UserCode
+		} else {
+			verifyURL += "?user_code=" + d.UserCode
+		}
+	}
+
+	fmt.Printf("Open this URL in your browser:\n  %s\n\n", verifyURL)
+	fmt.Printf("Enter code: %s\n\n", d.UserCode)
+	fmt.Println("Waiting for authorization...")
+
+	openBrowser(verifyURL)
+
+	interval := time.Duration(d.Interval) * time.Second
+	if interval < time.Second {
+		interval = 5 * time.Second
+	}
+	deadline := time.Now().Add(time.Duration(d.ExpiresIn) * time.Second)
+
+	for time.Now().Before(deadline) {
+		time.Sleep(interval)
+
+		tokenResp, err := pollToken(server, d.DeviceCode)
+		if err != nil {
+			return err
+		}
+
+		if tokenResp.Status == "pending" {
+			continue
+		}
+
+		if tokenResp.Status == "authorized" {
+			sc.APIKey = tokenResp.APIKey
+			if cfg.Stores == nil {
+				cfg.Stores = make(map[string]config.CloudStoreConfig)
+			}
+			cfg.Stores[hostname] = sc
+			if cfg.DefaultStore == "" {
+				cfg.DefaultStore = hostname
+			}
+			cfg.Version = 2
+			if err := config.Save(dataDir, cfg); err != nil {
+				return fmt.Errorf("saving config: %w", err)
+			}
+
+			reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+			if reg.DefaultName() == "" {
+				reg.SetDefault(hostname)
+			}
+
+			orgInfo := ""
+			if tokenResp.OrgName != "" {
+				orgInfo = fmt.Sprintf(" (%s)", tokenResp.OrgName)
+			}
+			fmt.Printf("Authenticated%s\n", orgInfo)
+			return nil
+		}
+
+		return fmt.Errorf("unexpected status: %s", tokenResp.Status)
+	}
+
+	return fmt.Errorf("authorization timed out")
+}
+
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Configure Compass (mode, authentication)",
+	Use:        "config",
+	Short:      "Configure Compass (deprecated, use 'compass store')",
+	Deprecated: "use 'compass store' instead",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSetupPrompt(cmd)
 	},
 }
 
 var configLoginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Authenticate with Compass Cloud via device flow",
+	Use:        "login",
+	Short:      "Authenticate with Compass Cloud (deprecated, use 'compass store add')",
+	Deprecated: "use 'compass store add <hostname>' instead",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		server := store.CloudAPIBase
-
-		resp, err := http.Post(server+"/auth/device", "application/json", nil)
-		if err != nil {
-			return fmt.Errorf("requesting device code: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			return fmt.Errorf("device code request failed with status %d", resp.StatusCode)
-		}
-
-		var deviceResp struct {
-			Data struct {
-				DeviceCode      string `json:"device_code"`
-				UserCode        string `json:"user_code"`
-				VerificationURI string `json:"verification_uri"`
-				ExpiresIn       int    `json:"expires_in"`
-				Interval        int    `json:"interval"`
-			} `json:"data"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
-			return fmt.Errorf("decoding device response: %w", err)
-		}
-		d := deviceResp.Data
-
-		verifyURL := d.VerificationURI
-		if verifyURL != "" && verifyURL[0] == '/' {
-			verifyURL = server + verifyURL
-		}
-		if d.UserCode != "" {
-			if strings.Contains(verifyURL, "?") {
-				verifyURL += "&user_code=" + d.UserCode
-			} else {
-				verifyURL += "?user_code=" + d.UserCode
-			}
-		}
-
-		fmt.Printf("Open this URL in your browser:\n  %s\n\n", verifyURL)
-		fmt.Printf("Enter code: %s\n\n", d.UserCode)
-		fmt.Println("Waiting for authorization...")
-
-		openBrowser(verifyURL)
-
-		interval := time.Duration(d.Interval) * time.Second
-		if interval < time.Second {
-			interval = 5 * time.Second
-		}
-		deadline := time.Now().Add(time.Duration(d.ExpiresIn) * time.Second)
-
-		for time.Now().Before(deadline) {
-			time.Sleep(interval)
-
-			tokenResp, err := pollToken(server, d.DeviceCode)
-			if err != nil {
-				return err
-			}
-
-			if tokenResp.Status == "pending" {
-				continue
-			}
-
-			if tokenResp.Status == "authorized" {
-				cfg.Cloud = &config.CloudConfig{
-					APIKey: tokenResp.APIKey,
-				}
-				cfg.Mode = ""
-				if err := config.Save(dataDir, cfg); err != nil {
-					return fmt.Errorf("saving config: %w", err)
-				}
-
-				orgInfo := ""
-				if tokenResp.OrgName != "" {
-					orgInfo = fmt.Sprintf(" (%s)", tokenResp.OrgName)
-				}
-				fmt.Printf("Authenticated%s\n", orgInfo)
-				return nil
-			}
-
-			return fmt.Errorf("unexpected status: %s", tokenResp.Status)
-		}
-
-		return fmt.Errorf("authorization timed out")
+		return runDeviceFlowLogin("compasscloud.io")
 	},
 }
 
 var configLogoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Log out of Compass Cloud",
+	Use:        "logout",
+	Short:      "Log out of Compass Cloud (deprecated, use 'compass store remove')",
+	Deprecated: "use 'compass store remove <hostname>' instead",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg.Cloud = nil
+		delete(cfg.Stores, "compasscloud.io")
+		if cfg.DefaultStore == "compasscloud.io" {
+			cfg.DefaultStore = ""
+		}
 		if err := config.Save(dataDir, cfg); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
@@ -371,21 +454,21 @@ var configLogoutCmd = &cobra.Command{
 }
 
 var configStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show current configuration and authentication status",
+	Use:        "status",
+	Short:      "Show current configuration (deprecated, use 'compass store list')",
+	Deprecated: "use 'compass store list' instead",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if cfg.Mode == "local" {
-			fmt.Println("Mode: local")
+		if cfg.LocalEnabled {
+			fmt.Println("Local store: enabled")
 			fmt.Println("Data: " + dataDir)
-			return nil
 		}
-		if cfg.Cloud == nil || cfg.Cloud.APIKey == "" {
-			fmt.Println("Not configured. Run: compass config")
-			return nil
+		for hostname, sc := range cfg.Stores {
+			fmt.Printf("Cloud store: %s\n", hostname)
+			fmt.Printf("  API key: %s...\n", sc.APIKey[:min(8, len(sc.APIKey))])
 		}
-		fmt.Println("Mode: cloud")
-		fmt.Printf("Server: %s\n", store.CloudAPIBase)
-		fmt.Printf("API key: %s...\n", cfg.Cloud.APIKey[:min(8, len(cfg.Cloud.APIKey))])
+		if cfg.DefaultStore != "" {
+			fmt.Printf("Default store: %s\n", cfg.DefaultStore)
+		}
 		return nil
 	},
 }
@@ -462,6 +545,18 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 }
 
+// storeForProject resolves a project key to its store.
+func storeForProject(projectKey string) (store.Store, error) {
+	s, _, err := reg.ForProject(projectKey)
+	return s, err
+}
+
+// storeForEntity resolves an entity ID to its store.
+func storeForEntity(entityID string) (store.Store, error) {
+	s, _, err := reg.ForEntity(entityID)
+	return s, err
+}
+
 // resolveProject returns the project ID from the flag, repo-local file, or global default.
 func resolveProject(cmd *cobra.Command) (string, error) {
 	p, _ := cmd.Flags().GetString("project")
@@ -473,8 +568,5 @@ func resolveProject(cmd *cobra.Command) (string, error) {
 			return rp, nil
 		}
 	}
-	if cfg != nil && cfg.DefaultProject != "" {
-		return cfg.DefaultProject, nil
-	}
-	return "", fmt.Errorf("--project is required (or set a default with: compass project set-default <id>, or link a repo with: compass project link)")
+	return "", fmt.Errorf("--project is required (or link a repo with: compass project link)")
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -13,9 +14,35 @@ var searchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectID, _ := cmd.Flags().GetString("project")
 
-		results, err := st.Search(args[0], projectID)
-		if err != nil {
-			return err
+		type result struct {
+			typ, id, title, snippet string
+		}
+		var results []result
+
+		if projectID != "" {
+			s, err := storeForProject(projectID)
+			if err != nil {
+				return err
+			}
+			sr, err := s.Search(args[0], projectID)
+			if err != nil {
+				return err
+			}
+			for _, r := range sr {
+				results = append(results, result{r.Type, r.ID, r.Title, r.Snippet})
+			}
+		} else {
+			// Fan out across all stores
+			for name, s := range reg.All() {
+				sr, err := s.Search(args[0], "")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: %s: %v\n", name, err)
+					continue
+				}
+				for _, r := range sr {
+					results = append(results, result{r.Type, r.ID, r.Title, r.Snippet})
+				}
+			}
 		}
 
 		if len(results) == 0 {
@@ -24,13 +51,9 @@ var searchCmd = &cobra.Command{
 		}
 
 		// Group by type
-		grouped := map[string][]struct {
-			id, title, snippet string
-		}{}
+		grouped := map[string][]result{}
 		for _, r := range results {
-			grouped[r.Type] = append(grouped[r.Type], struct {
-				id, title, snippet string
-			}{r.ID, r.Title, r.Snippet})
+			grouped[r.typ] = append(grouped[r.typ], r)
 		}
 
 		typeOrder := []string{"project", "epic", "task", "document"}
