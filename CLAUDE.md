@@ -16,13 +16,38 @@ No linter is configured. No Makefile. GoReleaser handles release builds.
 
 ## Architecture
 
-Compass is a markdown-native task/document tracking CLI. Data lives in `~/.compass/` as `.md` files with YAML frontmatter. There is no database; the filesystem is the source of truth.
+Compass is a markdown-native task/document tracking CLI supporting multiple stores (local filesystem and cloud instances). Local data lives in `~/.compass/` as `.md` files with YAML frontmatter. Cloud stores are accessed via REST API.
 
-### Storage layout
+### Multi-store architecture
+
+Compass supports multiple stores simultaneously. Each project is mapped to exactly one store via a cached lookup in `config.yaml`. Commands auto-route to the correct store based on the project key extracted from entity IDs.
+
+- **Local store**: backed by `~/.compass/projects/`, enabled via `compass store add local`
+- **Cloud stores**: identified by hostname (e.g. `compasscloud.io`), added via `compass store add <hostname>`
+- **Store registry** (`internal/store/registry.go`): routes commands to stores via `ForProject()`/`ForEntity()` with cache-hit/miss/stale logic
+- **Project cache** (`config.yaml` `projects` map): `projectKey -> storeName`, populated by `store fetch` or lazily on first access
+
+### Config format (v2)
+
+```yaml
+version: 2
+default_store: local
+local_enabled: true
+stores:
+  compasscloud.io:
+    api_key: cpk_xxx
+projects:
+  AUTH: local
+  API: compasscloud.io
+```
+
+V1 configs (no `version` field) are auto-migrated on first load.
+
+### Storage layout (local store)
 
 ```
 ~/.compass/
-├── config.yaml                    # default_project (stores project key)
+├── config.yaml                    # v2 multi-store config
 └── projects/
     └── AUTH/                      # project key (2-5 uppercase alphanumeric)
         ├── project.md
@@ -51,12 +76,12 @@ Epics have no status. They must not have a `status` field in frontmatter, displa
 
 ### Package responsibilities
 
-- `cmd/` - Cobra commands. Global state (`st`, `cfg`, `dataDir`) is set in `PersistentPreRunE`.
-- `internal/store/` - All file I/O. `ResolveEntityPath()` computes paths directly from the ID (no scanning).
+- `cmd/` - Cobra commands. Global state (`reg`, `cfg`, `dataDir`) is set in `PersistentPreRunE`. Uses `storeForProject()`/`storeForEntity()` helpers to route to the correct store.
+- `internal/store/` - Store interface, local filesystem implementation, cloud REST client, and `Registry` for multi-store routing. `ResolveEntityPath()` computes paths directly from the ID (no scanning).
 - `internal/model/` - Structs with `Validate()` methods. No I/O.
 - `internal/dag/` - Graph construction from `[]*model.Task`, cycle detection, topological sort, ASCII rendering.
 - `internal/markdown/` - Frontmatter parse/marshal, glamour rendering, lipgloss tables.
-- `internal/config/` - YAML config for default project.
+- `internal/config/` - V2 multi-store config with migration from v1. `CloudStoreConfig` type with `URL(hostname)` method.
 
 ### MTP integration
 

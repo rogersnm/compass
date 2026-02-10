@@ -2,7 +2,7 @@
 
 Markdown-native task and document tracking for your terminal.
 
-Compass stores everything as `.md` files with YAML frontmatter. No database, no sync service, no lock-in. Your data lives in `~/.compass/` as plain text you can grep, version, and edit with any tool.
+Compass stores everything as `.md` files with YAML frontmatter. No database, no lock-in. Your data lives in `~/.compass/` as plain text you can grep, version, and edit with any tool. Connect multiple stores (local filesystem and cloud instances) and compass routes commands to the right one automatically.
 
 ## Install
 
@@ -21,6 +21,9 @@ go install github.com/rogersnm/compass@latest
 ## Quick Start
 
 ```bash
+# Add a local store (first time only)
+compass store add local
+
 # Create a project (auto-generates key "MYAP" from name)
 compass project create "My App"
 
@@ -37,8 +40,8 @@ compass project set-default APP
 compass task create "Authentication" --type epic
 
 # Create tasks with dependencies
-compass task create "Design login page" --epic APP-TAAAAA
-compass task create "Implement OAuth" --epic APP-TAAAAA
+compass task create "Design login page" --parent-epic APP-TAAAAA
+compass task create "Implement OAuth" --parent-epic APP-TAAAAA
 compass task create "Write auth tests" --depends-on APP-TBBBBB,APP-TCCCCC
 
 # See what's ready to work on
@@ -87,17 +90,17 @@ Keys are auto-generated from the first 4 alpha characters of the project name (u
 ### Projects
 
 ```bash
-compass project create "Name" [--key K]  # Create a project
-compass project list                      # List all projects
-compass project show AUTH                 # Show project details
-compass project set-default AUTH          # Set default project
+compass project create "Name" [--key K] [--store S]  # Create a project
+compass project list                                  # List all projects (from cache)
+compass project show AUTH                             # Show project details
+compass project set-store AUTH compasscloud.io        # Reassign project to a different store
 ```
 
 ### Tasks
 
 ```bash
-compass task create "Title" [--project P] [--type task|epic] [--epic E] [--depends-on T1,T2] [--priority 0-3]
-compass task list [--project P] [--status S] [--type T] [--epic E]
+compass task create "Title" [--project P] [--type task|epic] [--parent-epic E] [--depends-on T1,T2] [--priority 0-3]
+compass task list [--project P] [--status S] [--type T] [--parent-epic E]
 compass task show AUTH-TXXXXX
 compass task update AUTH-TXXXXX [--title T] [--status S] [--depends-on T1,T2] [--priority 0-3]
 compass task edit AUTH-TXXXXX             # Open in $EDITOR
@@ -106,8 +109,8 @@ compass task close AUTH-TXXXXX            # Shortcut: set status to closed
 compass task delete AUTH-TXXXXX
 compass task ready [--project P] [--all]
 compass task graph [--project P]          # ASCII dependency graph
-compass task checkout AUTH-TXXXXX         # Copy to .compass/ for local editing
-compass task checkin AUTH-TXXXXX          # Write back to store, remove local copy
+compass task download AUTH-TXXXXX         # Copy to .compass/ for local editing
+compass task upload AUTH-TXXXXX           # Write back to store, remove local copy
 ```
 
 ### Documents
@@ -119,8 +122,8 @@ compass doc show AUTH-DXXXXX
 compass doc update AUTH-DXXXXX [--title T]
 compass doc edit AUTH-DXXXXX
 compass doc delete AUTH-DXXXXX
-compass doc checkout AUTH-DXXXXX
-compass doc checkin AUTH-DXXXXX
+compass doc download AUTH-DXXXXX
+compass doc upload AUTH-DXXXXX
 ```
 
 ### Repo Linking
@@ -129,6 +132,22 @@ compass doc checkin AUTH-DXXXXX
 compass repo init [PROJECT-ID]          # Link cwd to a project (writes .compass-project)
 compass repo show                       # Show current repo-project link
 compass repo unlink                     # Remove .compass-project from cwd
+```
+
+### Stores
+
+Compass supports multiple stores simultaneously. Each project lives on exactly one store; commands auto-route based on a cached project-to-store mapping.
+
+```bash
+compass store add local                          # Enable local filesystem store
+compass store add compasscloud.io                # Add a cloud store (device flow login)
+compass store add compasscloud.io --api-key KEY  # Add with API key (CI/non-interactive)
+compass store list                               # List configured stores
+compass store set-default local                  # Set default store for new projects
+compass store fetch                              # Fetch and cache projects from all stores
+compass store fetch --store compasscloud.io      # Fetch from one store
+compass store fetch --all                        # Non-interactive, add all projects
+compass store remove compasscloud.io             # Remove a store (prompts if projects mapped)
 ```
 
 ### Search
@@ -153,28 +172,27 @@ Commands that need a project resolve it in this order:
 
 1. `--project` / `-P` flag (explicit, highest priority)
 2. `.compass-project` file in the current directory or any ancestor
-3. Global default from `compass project set-default`
 
 The `.compass-project` file is a single-line text file containing a project key (like `.nvmrc` or `.node-version`). Run `compass repo init` to create one.
 
-## Checkout / Checkin
+## Download / Upload
 
-Compass stores data in `~/.compass/`, which is outside your working directory. AI coding tools and editors that operate on local files can use checkout/checkin to work with compass entities:
+Compass stores data in `~/.compass/`, which is outside your working directory. AI coding tools and editors that operate on local files can use download/upload to work with compass entities:
 
 ```bash
-compass task checkout AUTH-TXXXXX     # Copies to .compass/AUTH-TXXXXX.md
+compass task download AUTH-TXXXXX     # Copies to .compass/AUTH-TXXXXX.md
 # Edit .compass/AUTH-TXXXXX.md with any tool
-compass task checkin AUTH-TXXXXX      # Validates, writes back, removes local copy
+compass task upload AUTH-TXXXXX       # Validates, writes back, removes local copy
 ```
 
-Checkin validates frontmatter and (for tasks) checks dependency constraints before writing back. If validation fails, the local file is preserved so you can fix it.
+Upload validates frontmatter and (for tasks) checks dependency constraints before writing back. If validation fails, the local file is preserved so you can fix it.
 
 ## Storage Layout
 
 ```
 ~/.compass/
-├── config.yaml
-└── projects/
+├── config.yaml          # Multi-store config (v2)
+└── projects/            # Local store data
     └── AUTH/
         ├── project.md
         ├── documents/
@@ -183,7 +201,7 @@ Checkin validates frontmatter and (for tasks) checks dependency constraints befo
             └── AUTH-TXXXXX.md
 ```
 
-Each file is YAML frontmatter followed by a markdown body. You can edit them directly if you want.
+Local store files are YAML frontmatter followed by a markdown body. You can edit them directly if you want. Cloud store data lives on the remote server and is accessed via API.
 
 ## AI Tool Integration
 
