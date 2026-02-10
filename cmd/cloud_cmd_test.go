@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/rogersnm/compass/internal/config"
+	"github.com/rogersnm/compass/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,6 +40,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	path := r.URL.Path
+	// Strip /api/v1 prefix if present
+	if hasPrefix(path, "/api/v1") {
+		path = path[len("/api/v1"):]
+	}
 
 	const (
 		pfxProjects  = "/projects/"
@@ -157,23 +163,28 @@ func (f *fakeAPI) handleDeleteProject(w http.ResponseWriter, key string) {
 	json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"message": "deleted"}})
 }
 
+// Hash chars from charset: 23456789ABCDEFGHJKMNPQRSTUVWXYZ
+var taskHashSuffixes = []string{"ABCDE", "BCDEF", "CDEFG", "DEFGH", "EFGHJ", "FGHJK", "GHJKM", "HJKMN", "JKMNP"}
+
 func (f *fakeAPI) handleCreateTask(w http.ResponseWriter, r *http.Request, projID string) {
 	var body map[string]any
 	json.NewDecoder(r.Body).Decode(&body)
 	f.taskSeq++
-	displayID := projID + "-TTEST" + string(rune('0'+f.taskSeq))
+	hash := taskHashSuffixes[f.taskSeq%len(taskHashSuffixes)]
+	displayID := projID + "-T" + hash
 	taskType := "task"
 	if t, ok := body["type"].(string); ok && t != "" {
 		taskType = t
 	}
 	t := map[string]any{
 		"task_id":    "uuid-task-" + displayID,
-		"key": displayID,
+		"key":        displayID,
 		"title":      body["title"],
 		"type":       taskType,
 		"status":     "open",
 		"body":       body["body"],
 		"priority":   body["priority"],
+		"project_key": projID,
 		"project":    projID,
 		"created_at": "2026-01-01T00:00:00Z",
 	}
@@ -256,10 +267,11 @@ func (f *fakeAPI) handleCreateDocument(w http.ResponseWriter, r *http.Request, p
 	var body map[string]string
 	json.NewDecoder(r.Body).Decode(&body)
 	f.docSeq++
-	displayID := projID + "-DDOC0" + string(rune('0'+f.docSeq))
+	hash := taskHashSuffixes[f.docSeq%len(taskHashSuffixes)]
+	displayID := projID + "-D" + hash
 	d := map[string]any{
 		"document_id": "uuid-doc-" + displayID,
-		"key":  displayID,
+		"key":         displayID,
 		"title":       body["title"],
 		"body":        body["body"],
 		"project":     projID,
@@ -373,8 +385,8 @@ func extractProjectID(path, prefix, suffix string) string {
 	return after[:len(after)-len(suffix)]
 }
 
-// setupCloudEnv starts a fake API server, writes cloud config, and prepares
-// global state so PersistentPreRunE will select CloudStore.
+// setupCloudEnv starts a fake API server and prepares global state with a
+// registry containing the cloud store.
 func setupCloudEnv(t *testing.T) *fakeAPI {
 	t.Helper()
 	api := newFakeAPI()
@@ -383,17 +395,61 @@ func setupCloudEnv(t *testing.T) *fakeAPI {
 
 	dir := t.TempDir()
 	dataDir = dir
+
+	// Parse the test server URL so PersistentPreRunE can rebuild correctly
+	u, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+	hostname := u.Host // e.g. "127.0.0.1:12345"
+
 	cfg = &config.Config{
-		Cloud: &config.CloudConfig{
-			APIKey: "test-key",
+		Version:      2,
+		DefaultStore: hostname,
+		Stores: map[string]config.CloudStoreConfig{
+			hostname: {
+				APIKey:   "test-key",
+				Protocol: u.Scheme, // "http"
+				// Path defaults to "/api/v1"
+			},
 		},
+		Projects: map[string]string{},
 	}
 	require.NoError(t, config.Save(dir, cfg))
 
-	// Point CloudStore at the fake server
-	t.Setenv("COMPASS_API_BASE", srv.URL)
+	sc := cfg.Stores[hostname]
+	reg = store.NewRegistry(cfg, dir)
+	reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
 
 	return api
+}
+
+// seedProject adds a project to both the fake API and the registry cache.
+func seedProject(api *fakeAPI, key string) {
+	api.projects[key] = map[string]any{
+		"project_id": "uuid-" + key, "key": key, "name": "Cloud Project",
+		"body": "", "created_at": "2026-01-01T00:00:00Z",
+	}
+	reg.CacheProject(key, cfg.DefaultStore)
+}
+
+// seedTask adds a task with a valid hash ID to the fake API.
+func seedTask(api *fakeAPI, projID, hash, title string) string {
+	taskID := projID + "-T" + hash
+	api.tasks[taskID] = map[string]any{
+		"task_id": "uuid-task-" + taskID, "key": taskID, "title": title,
+		"type": "task", "status": "open", "body": "", "project": projID,
+		"project_key": projID, "created_at": "2026-01-01T00:00:00Z",
+	}
+	return taskID
+}
+
+// seedDoc adds a document with a valid hash ID to the fake API.
+func seedDoc(api *fakeAPI, projID, hash, title string) string {
+	docID := projID + "-D" + hash
+	api.documents[docID] = map[string]any{
+		"document_id": "uuid-doc-" + docID, "key": docID, "title": title,
+		"body": "doc body", "project": projID, "created_at": "2026-01-01T00:00:00Z",
+	}
+	return docID
 }
 
 // --- Store routing tests ---
@@ -403,13 +459,12 @@ func TestCloudRouting_PromptWhenNoConfig(t *testing.T) {
 	dataDir = dir
 	cfg = &config.Config{}
 
-	// Save empty config (no cloud section, no mode)
 	require.NoError(t, config.Save(dir, cfg))
 
 	// Non-interactive stdin falls through to default error
 	err := run(t, "project", "list")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "compass config login")
+	assert.Contains(t, err.Error(), "compass store add")
 }
 
 func TestCloudRouting_LocalMode(t *testing.T) {
@@ -419,7 +474,7 @@ func TestCloudRouting_LocalMode(t *testing.T) {
 
 	require.NoError(t, config.Save(dir, cfg))
 
-	// Should work fine with local store, even without cloud config
+	// Should work fine with local store after migration
 	err := run(t, "project", "list")
 	assert.NoError(t, err)
 }
@@ -429,8 +484,13 @@ func TestCloudRouting_LocalMode(t *testing.T) {
 func TestConfig_StatusLocal(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
-	cfg = &config.Config{Mode: "local"}
+	cfg = &config.Config{
+		Version: 2, LocalEnabled: true, DefaultStore: "local",
+		Projects: map[string]string{},
+	}
 	require.NoError(t, config.Save(dir, cfg))
+	reg = store.NewRegistry(cfg, dir)
+	reg.Add("local", store.NewLocal(dir))
 
 	require.NoError(t, run(t, "config", "status"))
 }
@@ -444,10 +504,10 @@ func TestConfig_StatusCloud(t *testing.T) {
 func TestConfig_StatusUnconfigured(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
-	cfg = &config.Config{}
+	cfg = &config.Config{Version: 2, Projects: map[string]string{}}
 	require.NoError(t, config.Save(dir, cfg))
+	reg = store.NewRegistry(cfg, dir)
 
-	// config status should work even without a configured store
 	require.NoError(t, run(t, "config", "status"))
 }
 
@@ -458,26 +518,28 @@ func TestConfig_Logout(t *testing.T) {
 
 	c, err := config.Load(dataDir)
 	require.NoError(t, err)
-	assert.Nil(t, c.Cloud)
+	_, hasCloud := c.Stores["compasscloud.io"]
+	assert.False(t, hasCloud)
 }
 
 func TestConfig_LogoutWhenLocal(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
-	cfg = &config.Config{Mode: "local"}
+	cfg = &config.Config{Version: 2, LocalEnabled: true, DefaultStore: "local", Projects: map[string]string{}}
 	require.NoError(t, config.Save(dir, cfg))
+	reg = store.NewRegistry(cfg, dir)
+	reg.Add("local", store.NewLocal(dir))
 
-	// Logout when already local should succeed without error
 	require.NoError(t, run(t, "config", "logout"))
 }
 
 func TestConfig_BypassesSetupPrompt(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
-	cfg = &config.Config{}
+	cfg = &config.Config{Version: 2, Projects: map[string]string{}}
 	require.NoError(t, config.Save(dir, cfg))
+	reg = store.NewRegistry(cfg, dir)
 
-	// config subcommands should not trigger the setup prompt
 	require.NoError(t, run(t, "config", "status"))
 	require.NoError(t, run(t, "config", "logout"))
 }
@@ -491,12 +553,8 @@ func TestCloud_ProjectCreate(t *testing.T) {
 
 func TestCloud_ProjectList(t *testing.T) {
 	api := setupCloudEnv(t)
-	// Seed a project
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "project", "list"))
@@ -505,10 +563,7 @@ func TestCloud_ProjectList(t *testing.T) {
 func TestCloud_ProjectShow(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "project body", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "project", "show", "CP"))
@@ -522,10 +577,7 @@ func TestCloud_ProjectShow_NotFound(t *testing.T) {
 func TestCloud_ProjectDelete(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "project", "delete", "CP", "--force"))
@@ -536,15 +588,25 @@ func TestCloud_ProjectDelete(t *testing.T) {
 	assert.False(t, exists)
 }
 
+func TestCloud_ProjectSetStore(t *testing.T) {
+	api := setupCloudEnv(t)
+	api.mu.Lock()
+	seedProject(api, "CP")
+	api.mu.Unlock()
+
+	require.NoError(t, run(t, "project", "set-store", "CP", cfg.DefaultStore))
+
+	c, err := config.Load(dataDir)
+	require.NoError(t, err)
+	assert.Equal(t, cfg.DefaultStore, c.Projects["CP"])
+}
+
 // --- Cloud mode task tests ---
 
 func TestCloud_TaskCreate(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "create", "Cloud Task", "--project", "CP"))
@@ -557,10 +619,7 @@ func TestCloud_TaskCreate(t *testing.T) {
 func TestCloud_TaskCreate_Epic(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "create", "Cloud Epic", "--project", "CP", "--type", "epic"))
@@ -576,15 +635,8 @@ func TestCloud_TaskCreate_Epic(t *testing.T) {
 func TestCloud_TaskList(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "list", "--project", "CP"))
@@ -593,61 +645,49 @@ func TestCloud_TaskList(t *testing.T) {
 func TestCloud_TaskShow(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "task body", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "show", "CP-TTEST1"))
+	require.NoError(t, run(t, "task", "show", taskID))
 }
 
 func TestCloud_TaskStart(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "start", "CP-TTEST1"))
+	require.NoError(t, run(t, "task", "start", taskID))
 
 	api.mu.Lock()
-	assert.Equal(t, "in_progress", api.tasks["CP-TTEST1"]["status"])
+	assert.Equal(t, "in_progress", api.tasks[taskID]["status"])
 	api.mu.Unlock()
 }
 
 func TestCloud_TaskClose(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "close", "CP-TTEST1"))
+	require.NoError(t, run(t, "task", "close", taskID))
 
 	api.mu.Lock()
-	assert.Equal(t, "closed", api.tasks["CP-TTEST1"]["status"])
+	assert.Equal(t, "closed", api.tasks[taskID]["status"])
 	api.mu.Unlock()
 }
 
 func TestCloud_TaskDelete(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "delete", "CP-TTEST1", "--force"))
+	require.NoError(t, run(t, "task", "delete", taskID, "--force"))
 
 	api.mu.Lock()
 	assert.Len(t, api.tasks, 0)
@@ -657,15 +697,8 @@ func TestCloud_TaskDelete(t *testing.T) {
 func TestCloud_TaskReady(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Ready Task",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	seedTask(api, "CP", "ABCDE", "Ready Task")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "ready", "--project", "CP"))
@@ -676,10 +709,7 @@ func TestCloud_TaskReady(t *testing.T) {
 func TestCloud_DocCreate(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "doc", "create", "Cloud Doc", "--project", "CP"))
@@ -692,41 +722,35 @@ func TestCloud_DocCreate(t *testing.T) {
 func TestCloud_DocShow(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "My Doc",
-		"body": "doc body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	docID := seedDoc(api, "CP", "ABCDE", "My Doc")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "doc", "show", "CP-DDOC01"))
+	require.NoError(t, run(t, "doc", "show", docID))
 }
 
 func TestCloud_DocDelete(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "My Doc",
-		"body": "", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	docID := seedDoc(api, "CP", "ABCDE", "My Doc")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "doc", "delete", "CP-DDOC01", "--force"))
+	require.NoError(t, run(t, "doc", "delete", docID, "--force"))
 
 	api.mu.Lock()
 	assert.Len(t, api.documents, 0)
 	api.mu.Unlock()
 }
 
-// --- Cloud mode checkout/checkin tests ---
+// --- Cloud mode download/upload tests ---
 
-func TestCloud_TaskCheckout(t *testing.T) {
+func TestCloud_TaskDownload(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Checkout Task",
-		"type": "task", "status": "open", "body": "task body", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Download Task")
+	api.tasks[taskID]["body"] = "task body"
 	api.mu.Unlock()
 
 	origDir, _ := os.Getwd()
@@ -734,18 +758,16 @@ func TestCloud_TaskCheckout(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "task", "checkout", "CP-TTEST1"))
-	assert.FileExists(t, filepath.Join(".compass", "CP-TTEST1.md"))
+	require.NoError(t, run(t, "task", "download", taskID))
+	assert.FileExists(t, filepath.Join(".compass", taskID+".md"))
 }
 
-func TestCloud_TaskCheckin(t *testing.T) {
+func TestCloud_TaskUpload(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Checkin Task",
-		"type": "task", "status": "open", "body": "original body", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Upload Task")
+	api.tasks[taskID]["body"] = "original body"
 	api.mu.Unlock()
 
 	origDir, _ := os.Getwd()
@@ -753,22 +775,20 @@ func TestCloud_TaskCheckin(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "task", "checkout", "CP-TTEST1"))
+	require.NoError(t, run(t, "task", "download", taskID))
 
-	localPath := filepath.Join(".compass", "CP-TTEST1.md")
+	localPath := filepath.Join(".compass", taskID+".md")
 	assert.FileExists(t, localPath)
 
-	require.NoError(t, run(t, "task", "checkin", "CP-TTEST1"))
+	require.NoError(t, run(t, "task", "upload", taskID))
 	assert.NoFileExists(t, localPath)
 }
 
-func TestCloud_DocCheckout(t *testing.T) {
+func TestCloud_DocDownload(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "Checkout Doc",
-		"body": "doc body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	docID := seedDoc(api, "CP", "ABCDE", "Download Doc")
 	api.mu.Unlock()
 
 	origDir, _ := os.Getwd()
@@ -776,17 +796,15 @@ func TestCloud_DocCheckout(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "doc", "checkout", "CP-DDOC01"))
-	assert.FileExists(t, filepath.Join(".compass", "CP-DDOC01.md"))
+	require.NoError(t, run(t, "doc", "download", docID))
+	assert.FileExists(t, filepath.Join(".compass", docID+".md"))
 }
 
-func TestCloud_DocCheckin(t *testing.T) {
+func TestCloud_DocUpload(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.documents["CP-DDOC01"] = map[string]any{
-		"document_id": "uuid-doc-1", "key": "CP-DDOC01", "title": "Checkin Doc",
-		"body": "original body", "project": "CP", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	docID := seedDoc(api, "CP", "ABCDE", "Upload Doc")
 	api.mu.Unlock()
 
 	origDir, _ := os.Getwd()
@@ -794,12 +812,12 @@ func TestCloud_DocCheckin(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "doc", "checkout", "CP-DDOC01"))
+	require.NoError(t, run(t, "doc", "download", docID))
 
-	localPath := filepath.Join(".compass", "CP-DDOC01.md")
+	localPath := filepath.Join(".compass", docID+".md")
 	assert.FileExists(t, localPath)
 
-	require.NoError(t, run(t, "doc", "checkin", "CP-DDOC01"))
+	require.NoError(t, run(t, "doc", "upload", docID))
 	assert.NoFileExists(t, localPath)
 }
 
@@ -808,11 +826,8 @@ func TestCloud_DocCheckin(t *testing.T) {
 func TestCloud_Search(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Auth Task",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	seedTask(api, "CP", "ABCDE", "Auth Task")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "search", "Auth"))
@@ -828,10 +843,7 @@ func TestCloud_Search_NoResults(t *testing.T) {
 func TestCloud_TaskCreate_WithPriority(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "create", "Urgent", "--project", "CP", "--type", "task", "--priority", "1"))
@@ -847,10 +859,7 @@ func TestCloud_TaskCreate_WithPriority(t *testing.T) {
 func TestCloud_TaskCreate_NoPriority(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "create", "Normal", "--project", "CP", "--type", "task", "--priority", "-1"))
@@ -858,7 +867,6 @@ func TestCloud_TaskCreate_NoPriority(t *testing.T) {
 	api.mu.Lock()
 	require.Len(t, api.tasks, 1)
 	for _, task := range api.tasks {
-		// -1 means no priority; should not be sent or should be nil
 		assert.Nil(t, task["priority"])
 	}
 	api.mu.Unlock()
@@ -867,34 +875,29 @@ func TestCloud_TaskCreate_NoPriority(t *testing.T) {
 func TestCloud_TaskUpdate_Priority(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"priority": nil, "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
+	api.tasks[taskID]["priority"] = nil
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "update", "CP-TTEST1", "--priority", "0"))
+	require.NoError(t, run(t, "task", "update", taskID, "--priority", "0"))
 
 	api.mu.Lock()
-	assert.Equal(t, float64(0), api.tasks["CP-TTEST1"]["priority"])
+	assert.Equal(t, float64(0), api.tasks[taskID]["priority"])
 	api.mu.Unlock()
 }
 
 func TestCloud_TaskUpdate_Status(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "Task 1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	taskID := seedTask(api, "CP", "ABCDE", "Task 1")
 	api.mu.Unlock()
 
-	require.NoError(t, run(t, "task", "update", "CP-TTEST1", "--status", "in_progress"))
+	require.NoError(t, run(t, "task", "update", taskID, "--status", "in_progress"))
 
 	api.mu.Lock()
-	assert.Equal(t, "in_progress", api.tasks["CP-TTEST1"]["status"])
+	assert.Equal(t, "in_progress", api.tasks[taskID]["status"])
 	api.mu.Unlock()
 }
 
@@ -903,20 +906,9 @@ func TestCloud_TaskUpdate_Status(t *testing.T) {
 func TestCloud_TaskReady_All(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
-	api.tasks["CP-TTEST1"] = map[string]any{
-		"task_id": "uuid-1", "key": "CP-TTEST1", "title": "T1",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
-	api.tasks["CP-TTEST2"] = map[string]any{
-		"task_id": "uuid-2", "key": "CP-TTEST2", "title": "T2",
-		"type": "task", "status": "open", "body": "", "project": "CP",
-		"created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
+	seedTask(api, "CP", "ABCDE", "T1")
+	seedTask(api, "CP", "BCDEF", "T2")
 	api.mu.Unlock()
 
 	require.NoError(t, run(t, "task", "ready", "--project", "CP", "--all"))
@@ -927,13 +919,9 @@ func TestCloud_TaskReady_All(t *testing.T) {
 func TestCloud_ProjectDelete_ClearsDefault(t *testing.T) {
 	api := setupCloudEnv(t)
 	api.mu.Lock()
-	api.projects["CP"] = map[string]any{
-		"project_id": "uuid-CP", "key": "CP", "name": "Cloud Project",
-		"body": "", "created_at": "2026-01-01T00:00:00Z",
-	}
+	seedProject(api, "CP")
 	api.mu.Unlock()
 
-	// Set CP as default project
 	cfg.DefaultProject = "CP"
 	require.NoError(t, config.Save(dataDir, cfg))
 
@@ -1011,7 +999,7 @@ func TestCloud_E2EWorkflow(t *testing.T) {
 	assert.Len(t, api.tasks, 2) // epic + Task B
 	api.mu.Unlock()
 
-	// 11. Checkout and checkin a doc
+	// 11. Download and upload a doc
 	api.mu.Lock()
 	var docID string
 	for id := range api.documents {
@@ -1025,11 +1013,11 @@ func TestCloud_E2EWorkflow(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "doc", "checkout", docID))
+	require.NoError(t, run(t, "doc", "download", docID))
 	localPath := filepath.Join(".compass", docID+".md")
 	assert.FileExists(t, localPath)
 
-	require.NoError(t, run(t, "doc", "checkin", docID))
+	require.NoError(t, run(t, "doc", "upload", docID))
 	assert.NoFileExists(t, localPath)
 
 	// 12. Delete project

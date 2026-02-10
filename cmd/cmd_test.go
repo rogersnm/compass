@@ -17,10 +17,17 @@ func setupEnv(t *testing.T) (store.Store, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dataDir = dir
-	st = store.NewLocal(dir)
-	cfg = &config.Config{Mode: "local"}
+	cfg = &config.Config{
+		Version:      2,
+		LocalEnabled: true,
+		DefaultStore: "local",
+		Projects:     map[string]string{},
+	}
 	require.NoError(t, config.Save(dir, cfg))
-	return st, dir
+	reg = store.NewRegistry(cfg, dir)
+	ls := store.NewLocal(dir)
+	reg.Add("local", ls)
+	return ls, dir
 }
 
 func run(t *testing.T, args ...string) error {
@@ -52,6 +59,13 @@ func TestProjectCreate_WithKey(t *testing.T) {
 	assert.Equal(t, "TP", projects[0].ID)
 }
 
+func TestProjectCreate_CachesProject(t *testing.T) {
+	setupEnv(t)
+	require.NoError(t, run(t, "project", "create", "Test Project", "--key", "TP"))
+
+	assert.Equal(t, "local", cfg.Projects["TP"])
+}
+
 func TestProjectList_Empty(t *testing.T) {
 	setupEnv(t)
 	require.NoError(t, run(t, "project", "list"))
@@ -66,6 +80,7 @@ func TestProjectSetDefault(t *testing.T) {
 	s, dir := setupEnv(t)
 	p, err := s.CreateProject("Test Project", "TP", "")
 	require.NoError(t, err)
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "project", "set-default", p.ID))
 
@@ -77,6 +92,7 @@ func TestProjectSetDefault(t *testing.T) {
 func TestDocCreate_WithProject(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "doc", "create", "My Doc", "--project", p.ID))
 
@@ -86,12 +102,10 @@ func TestDocCreate_WithProject(t *testing.T) {
 }
 
 func TestDocCreate_DefaultProject(t *testing.T) {
-	s, dir := setupEnv(t)
+	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{Mode: "local", DefaultProject: p.ID}
-	config.Save(dir, cfg)
+	reg.CacheProject(p.ID, "local")
 
-	// Must explicitly pass --project "" to clear any leftover flag from prior test
 	require.NoError(t, run(t, "doc", "create", "My Doc", "--project", p.ID))
 
 	docs, err := s.ListDocuments(p.ID)
@@ -102,6 +116,7 @@ func TestDocCreate_DefaultProject(t *testing.T) {
 func TestTaskCreate_Minimal(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--type", "task"))
 
@@ -114,6 +129,7 @@ func TestTaskCreate_Minimal(t *testing.T) {
 func TestTaskCreate_EpicType(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "task", "create", "Auth Epic", "--project", p.ID, "--type", "epic"))
 
@@ -127,6 +143,7 @@ func TestTaskCreate_EpicType(t *testing.T) {
 func TestTaskCreate_WithPriority(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "task", "create", "Urgent", "--project", p.ID, "--type", "task", "--priority", "1"))
 
@@ -140,6 +157,7 @@ func TestTaskCreate_WithPriority(t *testing.T) {
 func TestTaskCreate_NoPriority(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	require.NoError(t, run(t, "task", "create", "Normal", "--project", p.ID, "--type", "task", "--priority", "-1"))
 
@@ -152,6 +170,7 @@ func TestTaskCreate_NoPriority(t *testing.T) {
 func TestTaskUpdate_Priority(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "update", task.ID, "--priority", "0"))
@@ -165,6 +184,7 @@ func TestTaskUpdate_Priority(t *testing.T) {
 func TestTaskCreate_WithDeps(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	t1, _ := s.CreateTask("Dep", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "create", "My Task", "--project", p.ID, "--type", "task", "--depends-on", t1.ID))
@@ -177,6 +197,7 @@ func TestTaskCreate_WithDeps(t *testing.T) {
 func TestTaskUpdate_Status(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "update", task.ID, "--status", "in_progress"))
@@ -189,6 +210,7 @@ func TestTaskUpdate_Status(t *testing.T) {
 func TestTaskStart(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "start", task.ID))
@@ -201,6 +223,7 @@ func TestTaskStart(t *testing.T) {
 func TestTaskClose(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "close", task.ID))
@@ -213,6 +236,7 @@ func TestTaskClose(t *testing.T) {
 func TestTaskStart_EpicRejected(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
 
 	err := run(t, "task", "start", epic.ID)
@@ -223,6 +247,7 @@ func TestTaskStart_EpicRejected(t *testing.T) {
 func TestTaskClose_EpicRejected(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
 
 	err := run(t, "task", "close", epic.ID)
@@ -233,6 +258,7 @@ func TestTaskClose_EpicRejected(t *testing.T) {
 func TestTaskUpdate_EpicStatusRejected(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	epic, _ := s.CreateTask("Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
 
 	err := run(t, "task", "update", epic.ID, "--status", "in_progress")
@@ -243,7 +269,7 @@ func TestTaskUpdate_EpicStatusRejected(t *testing.T) {
 func TestTaskReady(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{DefaultProject: p.ID}
+	reg.CacheProject(p.ID, "local")
 	s.CreateTask("Ready Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "ready", "--project", p.ID))
@@ -252,7 +278,7 @@ func TestTaskReady(t *testing.T) {
 func TestTaskReady_All(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{DefaultProject: p.ID}
+	reg.CacheProject(p.ID, "local")
 	s.CreateTask("T1", p.ID, store.TaskCreateOpts{})
 	s.CreateTask("T2", p.ID, store.TaskCreateOpts{})
 
@@ -262,6 +288,7 @@ func TestTaskReady_All(t *testing.T) {
 func TestTaskDelete_Force(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "delete", task.ID, "--force"))
@@ -273,6 +300,7 @@ func TestTaskDelete_Force(t *testing.T) {
 func TestDocDelete_Force(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	d, _ := s.CreateDocument("Doc", p.ID, "body")
 
 	require.NoError(t, run(t, "doc", "delete", d.ID, "--force"))
@@ -284,6 +312,7 @@ func TestDocDelete_Force(t *testing.T) {
 func TestProjectDelete_Force(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	s.CreateTask("Task", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))
@@ -295,7 +324,8 @@ func TestProjectDelete_Force(t *testing.T) {
 func TestProjectDelete_ClearsDefault(t *testing.T) {
 	s, dir := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{Mode: "local", DefaultProject: p.ID}
+	reg.CacheProject(p.ID, "local")
+	cfg.DefaultProject = p.ID
 	config.Save(dir, cfg)
 
 	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))
@@ -305,10 +335,44 @@ func TestProjectDelete_ClearsDefault(t *testing.T) {
 	assert.Empty(t, c.DefaultProject)
 }
 
+func TestProjectDelete_UncachesProject(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
+
+	require.NoError(t, run(t, "project", "delete", p.ID, "--force"))
+	_, ok := cfg.Projects[p.ID]
+	assert.False(t, ok)
+}
+
+func TestProjectSetStore(t *testing.T) {
+	s, dir := setupEnv(t)
+	p, err := s.CreateProject("Test Project", "TP", "")
+	require.NoError(t, err)
+	reg.CacheProject(p.ID, "local")
+
+	require.NoError(t, run(t, "project", "set-store", p.ID, "local"))
+
+	c, err := config.Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "local", c.Projects[p.ID])
+}
+
+func TestProjectSetStore_InvalidStore(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, err := s.CreateProject("Test Project", "TP", "")
+	require.NoError(t, err)
+	reg.CacheProject(p.ID, "local")
+
+	err = run(t, "project", "set-store", p.ID, "nonexistent")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
 func TestTaskGraph(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
-	cfg = &config.Config{DefaultProject: p.ID}
+	reg.CacheProject(p.ID, "local")
 	s.CreateTask("Root", p.ID, store.TaskCreateOpts{})
 
 	require.NoError(t, run(t, "task", "graph", "--project", p.ID))
@@ -316,13 +380,15 @@ func TestTaskGraph(t *testing.T) {
 
 func TestSearch_NoResults(t *testing.T) {
 	s, _ := setupEnv(t)
-	s.CreateProject("Test Project", "TP", "")
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	require.NoError(t, run(t, "search", "xyznonexistent"))
 }
 
-func TestTaskCheckout(t *testing.T) {
+func TestTaskDownload(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "task body"})
 
 	// Change to a temp dir so .compass/ is created there
@@ -331,15 +397,16 @@ func TestTaskCheckout(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "task", "checkout", task.ID))
+	require.NoError(t, run(t, "task", "download", task.ID))
 
 	localPath := filepath.Join(".compass", task.ID+".md")
 	assert.FileExists(t, localPath)
 }
 
-func TestTaskCheckin(t *testing.T) {
+func TestTaskUpload(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	task, _ := s.CreateTask("My Task", p.ID, store.TaskCreateOpts{Body: "old body"})
 
 	origDir, _ := os.Getwd()
@@ -347,8 +414,8 @@ func TestTaskCheckin(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "task", "checkout", task.ID))
-	require.NoError(t, run(t, "task", "checkin", task.ID))
+	require.NoError(t, run(t, "task", "download", task.ID))
+	require.NoError(t, run(t, "task", "upload", task.ID))
 
 	// Local file should be gone
 	localPath := filepath.Join(".compass", task.ID+".md")
@@ -360,9 +427,10 @@ func TestTaskCheckin(t *testing.T) {
 	assert.Equal(t, "My Task", got.Title)
 }
 
-func TestDocCheckout(t *testing.T) {
+func TestDocDownload(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "doc body")
 
 	origDir, _ := os.Getwd()
@@ -370,15 +438,16 @@ func TestDocCheckout(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "doc", "checkout", doc.ID))
+	require.NoError(t, run(t, "doc", "download", doc.ID))
 
 	localPath := filepath.Join(".compass", doc.ID+".md")
 	assert.FileExists(t, localPath)
 }
 
-func TestDocCheckin(t *testing.T) {
+func TestDocUpload(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 	doc, _ := s.CreateDocument("My Doc", p.ID, "old body")
 
 	origDir, _ := os.Getwd()
@@ -386,8 +455,8 @@ func TestDocCheckin(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
-	require.NoError(t, run(t, "doc", "checkout", doc.ID))
-	require.NoError(t, run(t, "doc", "checkin", doc.ID))
+	require.NoError(t, run(t, "doc", "download", doc.ID))
+	require.NoError(t, run(t, "doc", "upload", doc.ID))
 
 	localPath := filepath.Join(".compass", doc.ID+".md")
 	assert.NoFileExists(t, localPath)
@@ -400,6 +469,7 @@ func TestDocCheckin(t *testing.T) {
 func TestProjectLink_Success(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	origDir, _ := os.Getwd()
 	tmpDir := t.TempDir()
@@ -427,6 +497,7 @@ func TestProjectLink_InvalidProject(t *testing.T) {
 func TestProjectUnlink_Success(t *testing.T) {
 	s, _ := setupEnv(t)
 	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
 
 	origDir, _ := os.Getwd()
 	tmpDir := t.TempDir()
@@ -443,9 +514,10 @@ func TestProjectUnlink_Success(t *testing.T) {
 
 func TestResolveProject_RepoFileOverridesDefault(t *testing.T) {
 	s, _ := setupEnv(t)
-	p1, _ := s.CreateProject("Default Project", "DP", "")
+	_, _ = s.CreateProject("Default Project", "DP", "")
 	p2, _ := s.CreateProject("Repo Project", "RP", "")
-	cfg = &config.Config{DefaultProject: p1.ID}
+	reg.CacheProject("DP", "local")
+	reg.CacheProject("RP", "local")
 
 	origDir, _ := os.Getwd()
 	tmpDir := t.TempDir()
@@ -455,7 +527,7 @@ func TestResolveProject_RepoFileOverridesDefault(t *testing.T) {
 	require.NoError(t, repofile.Write(tmpDir, p2.ID))
 
 	// Task create without --project should use repo file (p2), not global default (p1)
-	require.NoError(t, run(t, "task", "create", "Repo Task", "--project", "", "--type", "task", "--priority", "-1", "--depends-on", "", "--epic", ""))
+	require.NoError(t, run(t, "task", "create", "Repo Task", "--project", "", "--type", "task", "--priority", "-1", "--depends-on", "", "--parent-epic", ""))
 
 	tasks, err := s.ListTasks(store.TaskFilter{ProjectID: p2.ID})
 	require.NoError(t, err)
@@ -463,10 +535,29 @@ func TestResolveProject_RepoFileOverridesDefault(t *testing.T) {
 	assert.Equal(t, "Repo Task", tasks[0].Title)
 }
 
+func TestTaskList_UsesRepoFile(t *testing.T) {
+	s, _ := setupEnv(t)
+	p, _ := s.CreateProject("Test Project", "TP", "")
+	reg.CacheProject(p.ID, "local")
+	s.CreateTask("A Task", p.ID, store.TaskCreateOpts{})
+
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	require.NoError(t, repofile.Write(tmpDir, p.ID))
+
+	// task list without --project should resolve from repo file
+	require.NoError(t, run(t, "task", "list", "--project", "", "--status", "", "--type", "", "--parent-epic", ""))
+}
+
 func TestResolveProject_FlagOverridesRepoFile(t *testing.T) {
 	s, _ := setupEnv(t)
 	p1, _ := s.CreateProject("Flag Project", "FP", "")
 	p2, _ := s.CreateProject("Repo Project", "RP", "")
+	reg.CacheProject(p1.ID, "local")
+	reg.CacheProject(p2.ID, "local")
 
 	origDir, _ := os.Getwd()
 	tmpDir := t.TempDir()
@@ -490,51 +581,49 @@ func TestE2EWorkflow(t *testing.T) {
 	// 1. Create project
 	p, err := s.CreateProject("E2E Project", "", "")
 	require.NoError(t, err)
+	reg.CacheProject(p.ID, "local")
 
-	// 2. Set default
-	cfg = &config.Config{DefaultProject: p.ID}
-
-	// 3. Create docs
+	// 2. Create docs
 	d1, _ := s.CreateDocument("Design Doc", p.ID, "")
 	d2, _ := s.CreateDocument("API Spec", p.ID, "")
 	_ = d1
 	_ = d2
 
-	// 4. Create epic (now a task with type=epic)
+	// 3. Create epic (now a task with type=epic)
 	epic, _ := s.CreateTask("Auth Epic", p.ID, store.TaskCreateOpts{Type: model.TypeEpic})
 
-	// 5. Create tasks
+	// 4. Create tasks
 	tA, _ := s.CreateTask("Task A", p.ID, store.TaskCreateOpts{Epic: epic.ID})
 	_, _ = s.CreateTask("Task B", p.ID, store.TaskCreateOpts{})
 	tC, _ := s.CreateTask("Task C", p.ID, store.TaskCreateOpts{DependsOn: []string{tA.ID}})
 
-	// 6. Verify counts
+	// 5. Verify counts
 	docs, _ := s.ListDocuments(p.ID)
 	assert.Len(t, docs, 2)
 	tasks, _ := s.ListTasks(store.TaskFilter{ProjectID: p.ID})
 	assert.Len(t, tasks, 4) // 3 tasks + 1 epic
 
-	// 7. Task C should be blocked
+	// 6. Task C should be blocked
 	allTasks, _ := s.AllTaskMap(p.ID)
 	assert.True(t, tC.IsBlocked(allTasks))
 
-	// 8. Close Task A
+	// 7. Close Task A
 	closed := model.StatusClosed
 	s.UpdateTask(tA.ID, store.TaskUpdate{Status: &closed})
 
-	// 9. Task C no longer blocked
+	// 8. Task C no longer blocked
 	allTasks, _ = s.AllTaskMap(p.ID)
 	gotC, _, _ := s.GetTask(tC.ID)
 	assert.False(t, gotC.IsBlocked(allTasks))
 
-	// 10. Graph via CLI
+	// 9. Graph via CLI
 	require.NoError(t, run(t, "task", "graph", "--project", p.ID))
 
-	// 11. Search
+	// 10. Search
 	results, _ := s.Search("Auth", "")
 	assert.GreaterOrEqual(t, len(results), 1)
 
-	// 12. Ready tasks
+	// 11. Ready tasks
 	ready, err := s.ReadyTasks(p.ID)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(ready), 1)
