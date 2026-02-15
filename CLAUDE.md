@@ -79,18 +79,38 @@ Tasks have a DAG of dependencies via `depends_on`. Epic-type tasks cannot have d
 
 Epics have no status. They must not have a `status` field in frontmatter, display "N/A" in listings, and are excluded from status filtering. Status-changing commands (`task start`, `task close`, `task update --status`) are rejected on epics.
 
+### Project resolution
+
+Commands that need a project call `resolveProject()` which checks in order:
+
+1. `--project` / `-P` flag
+2. `.compass-project` file in cwd or any ancestor (via `internal/repofile`)
+3. Error if neither found
+
 ### Package responsibilities
 
-- `cmd/` - Cobra commands. Global state (`reg`, `cfg`, `dataDir`) is set in `PersistentPreRunE`. Uses `storeForProject()`/`storeForEntity()` helpers to route to the correct store.
-- `internal/store/` - Store interface, local filesystem implementation, cloud REST client, and `Registry` for multi-store routing. `ResolveEntityPath()` computes paths directly from the ID (no scanning).
+- `cmd/` - Cobra commands. Global state (`reg`, `cfg`, `dataDir`) is set in `PersistentPreRunE`. Uses `storeForProject()`/`storeForEntity()` helpers to route to the correct store. Commands that don't need stores (`go`, `store`, `config`) are exempted from the store-check in `PersistentPreRunE`.
+- `internal/store/` - `Store` interface, `Local` filesystem implementation, `CloudStore` REST client, and `Registry` for multi-store routing. `ResolveEntityPath()` computes paths directly from the ID (no scanning).
 - `internal/model/` - Structs with `Validate()` methods. No I/O.
 - `internal/dag/` - Graph construction from `[]*model.Task`, cycle detection, topological sort, ASCII rendering.
-- `internal/markdown/` - Frontmatter parse/marshal, glamour rendering, lipgloss tables.
+- `internal/markdown/` - Generic `Parse[T]()` / `Marshal()` for frontmatter round-tripping, glamour rendering, lipgloss table helpers (`RenderTaskTable`, `RenderProjectTable`, etc.).
 - `internal/config/` - V2 multi-store config with migration from v1. `CloudStoreConfig` type with `Hostname` field and `URL()` method.
+- `internal/id/` - ID generation and parsing: `GenerateKey()`, `NewTaskID()`, `NewDocID()`, `Parse()`, `TypeOf()`, `ProjectKeyFrom()`.
+- `internal/repofile/` - `.compass-project` file discovery. `Find()` walks up directories; `Write()` / `Read()` manage the file.
+- `internal/editor/` - Opens files in `$EDITOR` / `$VISUAL` / `vi`.
 
 ### MTP integration
 
 `cmd/root.go` registers command annotations (stdin/stdout descriptors, examples) via `github.com/modeltoolsprotocol/go-sdk`. The `--mtp-describe` flag emits a JSON schema of all commands.
+
+## Testing
+
+Two test suites in `cmd/`:
+
+- **`cmd_test.go`** (local store): `setupEnv(t)` creates a temp dir with v2 config and a fresh registry. `run(t, args...)` calls `rootCmd.SetArgs()` + `Execute()`.
+- **`cloud_cmd_test.go`** (cloud store): `setupCloudEnv(t)` starts an `httptest.Server` backed by `fakeAPI` (in-memory cloud API implementation). Tests exercise the same commands through real HTTP.
+
+Both suites use `setupEnv`/`setupCloudEnv` before each test to reset Cobra flag state.
 
 ## Key gotchas
 
@@ -98,6 +118,7 @@ Epics have no status. They must not have a `status` field in frontmatter, displa
 - **`adrg/frontmatter`** does NOT error on missing frontmatter; it returns an empty struct.
 - **stdin detection:** Uses `os.ModeNamedPipe` check (not `ModeCharDevice`), because the latter fails in piped environments like Claude Code.
 - **Version injection:** `cmd.version` is a `var` defaulting to `"dev"`, stamped by GoReleaser via ldflags.
+- **PersistentPreRunE skip list:** Commands that don't need store infrastructure (`go`, `store`, `config`) must be exempted in `root.go`'s `PersistentPreRunE`; otherwise they trigger the first-run setup prompt.
 
 ## Release
 

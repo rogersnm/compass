@@ -31,10 +31,7 @@ compass project create "My App"
 compass project create "My App" --key APP
 
 # Link this repo to the project (writes .compass-project in cwd)
-compass repo init APP
-
-# Or set a global default instead
-compass project set-default APP
+compass project link APP
 
 # Create an epic
 compass task create "Authentication" --type epic
@@ -129,9 +126,8 @@ compass doc upload AUTH-DXXXXX
 ### Repo Linking
 
 ```bash
-compass repo init [PROJECT-ID]          # Link cwd to a project (writes .compass-project)
-compass repo show                       # Show current repo-project link
-compass repo unlink                     # Remove .compass-project from cwd
+compass project link [PROJECT-ID]       # Link cwd to a project (writes .compass-project)
+compass project unlink                  # Remove .compass-project from cwd
 ```
 
 ### Stores
@@ -173,7 +169,7 @@ Commands that need a project resolve it in this order:
 1. `--project` / `-P` flag (explicit, highest priority)
 2. `.compass-project` file in the current directory or any ancestor
 
-The `.compass-project` file is a single-line text file containing a project key (like `.nvmrc` or `.node-version`). Run `compass repo init` to create one.
+The `.compass-project` file is a single-line text file containing a project key (like `.nvmrc` or `.node-version`). Run `compass project link` to create one.
 
 ## Download / Upload
 
