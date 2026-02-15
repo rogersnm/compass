@@ -65,8 +65,8 @@ var storeAddCmd = &cobra.Command{
 			if err := huh.NewSelect[string]().
 				Title(fmt.Sprintf("Store %q already exists.", storeName)).
 				Options(
-					huh.NewOption("Overwrite existing", "overwrite"),
-					huh.NewOption("Enter a new name", "rename"),
+					huh.NewOption("Replace its configuration", "overwrite"),
+					huh.NewOption("Keep existing and add with a different name", "rename"),
 					huh.NewOption("Cancel", "cancel"),
 				).
 				Value(&choice).
