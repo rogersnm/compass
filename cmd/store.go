@@ -65,7 +65,6 @@ var storeAddCmd = &cobra.Command{
 			if err := huh.NewSelect[string]().
 				Title(fmt.Sprintf("Store %q already exists.", storeName)).
 				Options(
-					huh.NewOption("Replace its configuration", "overwrite"),
 					huh.NewOption("Keep existing and add with a different name", "rename"),
 					huh.NewOption("Cancel", "cancel"),
 				).
@@ -73,10 +72,7 @@ var storeAddCmd = &cobra.Command{
 				Run(); err != nil {
 				return fmt.Errorf("cancelled")
 			}
-			switch choice {
-			case "overwrite":
-				// proceed
-			case "rename":
+			if choice == "rename" {
 				var newName string
 				if err := huh.NewInput().
 					Title("New store name").
@@ -88,7 +84,7 @@ var storeAddCmd = &cobra.Command{
 					return err
 				}
 				storeName = newName
-			default:
+			} else {
 				return fmt.Errorf("cancelled")
 			}
 		}
