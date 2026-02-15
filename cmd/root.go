@@ -73,6 +73,10 @@ var rootCmd = &cobra.Command{
 		if cmd.Name() == "store" || (cmd.Parent() != nil && cmd.Parent().Name() == "store") {
 			return nil
 		}
+		// go command just prints a skill file, no store needed
+		if cmd.Name() == "go" {
+			return nil
+		}
 		// Config commands (legacy, kept for backwards compat during transition)
 		if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
 			return nil
