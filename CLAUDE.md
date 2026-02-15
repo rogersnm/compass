@@ -118,7 +118,7 @@ Both suites use `setupEnv`/`setupCloudEnv` before each test to reset Cobra flag 
 - **`adrg/frontmatter`** does NOT error on missing frontmatter; it returns an empty struct.
 - **stdin detection:** Uses `os.ModeNamedPipe` check (not `ModeCharDevice`), because the latter fails in piped environments like Claude Code.
 - **Version injection:** `cmd.version` is a `var` defaulting to `"dev"`, stamped by GoReleaser via ldflags.
-- **PersistentPreRunE skip list:** Commands that don't need store infrastructure (`go`, `store`, `config`) must be exempted in `root.go`'s `PersistentPreRunE`; otherwise they trigger the first-run setup prompt.
+- **PersistentPreRunE skip list:** Commands that don't need store infrastructure (`go`, `claude-init`, `store`, `config`) must be exempted in `root.go`'s `PersistentPreRunE`; otherwise they trigger the first-run setup prompt.
 
 ## Release
 

@@ -37,6 +37,11 @@ compass project link APP
 
 ### Working with Claude Code
 
+```bash
+# Install the plan-task-splitter agent (once per machine)
+compass claude-init
+```
+
 From a linked repo, use `!compass go` to inject the task runner prompt. Claude Code will pick the next ready task, work it, and close it when done.
 
 When planning new work, ask Claude Code to use its **plan-task-splitter** agent to break a plan into Compass tasks automatically.
