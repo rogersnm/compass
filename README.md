@@ -20,42 +20,43 @@ go install github.com/rogersnm/compass@latest
 
 ## Quick Start
 
+### Initial setup
+
 ```bash
-# Add a local store (first time only)
-compass store add local
+# Configure a store (once per machine)
+compass store add local                    # local filesystem
+compass store add compasscloud.io          # or cloud
 
-# Create a project (auto-generates key "MYAP" from name)
-compass project create "My App"
-
-# Or specify a key explicitly
+# Create a project
 compass project create "My App" --key APP
 
-# Link this repo to the project (writes .compass-project in cwd)
+# Link your repo so commands auto-resolve the project
+cd ~/code/my-app
 compass project link APP
+```
 
-# Create an epic
-compass task create "Authentication" --type epic
+### Working with Claude Code
 
-# Create tasks with dependencies
+From a linked repo, use `!compass go` to inject the task runner prompt. Claude Code will pick the next ready task, work it, and close it when done.
+
+When planning new work, ask Claude Code to use its **plan-task-splitter** agent to break a plan into Compass tasks automatically.
+
+### Manual usage
+
+```bash
+# Create tasks
 compass task create "Design login page" --parent-epic APP-TAAAAA
-compass task create "Implement OAuth" --parent-epic APP-TAAAAA
-compass task create "Write auth tests" --depends-on APP-TBBBBB,APP-TCCCCC
+compass task create "Implement OAuth" --depends-on APP-TBBBBB --priority 1
 
-# See what's ready to work on
+# See what's ready
 compass task ready --all
 
-# Start working
+# Work a task
 compass task start APP-TBBBBB
+compass task close APP-TBBBBB
 
-# Set priority (P0 = critical, P3 = low)
-compass task create "Fix login crash" --priority 0
-
-# Pipe markdown content into tasks and docs
-echo '# Login Page Spec
-
-- Email + password
-- OAuth with Google
-- Rate limiting on failed attempts' | compass doc create "Login Spec"
+# Pipe markdown into tasks and docs
+echo '# Login Spec' | compass doc create "Login Spec"
 ```
 
 ## Concepts
