@@ -16,13 +16,13 @@ var storeCmd = &cobra.Command{
 }
 
 var storeAddCmd = &cobra.Command{
-	Use:   "add <name>",
+	Use:   "add <hostname>",
 	Short: "Add a store (\"local\" or cloud hostname)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		arg := args[0]
 
-		if name == "local" {
+		if arg == "local" {
 			cfg.Version = 2
 			cfg.LocalEnabled = true
 			if cfg.DefaultStore == "" {
@@ -50,12 +50,55 @@ var storeAddCmd = &cobra.Command{
 		}
 
 		// Cloud store
-		hostname := name
+		hostname := arg
+		storeName, _ := cmd.Flags().GetString("name")
+		if storeName == "" {
+			storeName = hostname
+		}
+		if err := config.ValidateStoreName(storeName); err != nil {
+			return err
+		}
+
+		// Handle name collision
+		if _, exists := cfg.Stores[storeName]; exists {
+			var choice string
+			if err := huh.NewSelect[string]().
+				Title(fmt.Sprintf("Store %q already exists.", storeName)).
+				Options(
+					huh.NewOption("Overwrite existing", "overwrite"),
+					huh.NewOption("Enter a new name", "rename"),
+					huh.NewOption("Cancel", "cancel"),
+				).
+				Value(&choice).
+				Run(); err != nil {
+				return fmt.Errorf("cancelled")
+			}
+			switch choice {
+			case "overwrite":
+				// proceed
+			case "rename":
+				var newName string
+				if err := huh.NewInput().
+					Title("New store name").
+					Value(&newName).
+					Run(); err != nil {
+					return fmt.Errorf("cancelled")
+				}
+				if err := config.ValidateStoreName(newName); err != nil {
+					return err
+				}
+				storeName = newName
+			default:
+				return fmt.Errorf("cancelled")
+			}
+		}
+
 		apiKey, _ := cmd.Flags().GetString("api-key")
 		path, _ := cmd.Flags().GetString("path")
 		protocol, _ := cmd.Flags().GetString("protocol")
 
 		sc := config.CloudStoreConfig{
+			Hostname: hostname,
 			Path:     path,
 			Protocol: protocol,
 		}
@@ -68,33 +111,38 @@ var storeAddCmd = &cobra.Command{
 			if cfg.Stores == nil {
 				cfg.Stores = make(map[string]config.CloudStoreConfig)
 			}
-			cfg.Stores[hostname] = sc
-			if err := runDeviceFlowLogin(hostname); err != nil {
+			cfg.Stores[storeName] = sc
+			if err := runDeviceFlowLogin(storeName); err != nil {
 				return err
 			}
-			// runDeviceFlowLogin updates cfg.Stores[hostname] with the API key
-			return fetchProjectsInteractive(hostname)
+			// runDeviceFlowLogin updates cfg.Stores[storeName] with the API key
+			return fetchProjectsInteractive(storeName)
 		}
 
 		if cfg.Stores == nil {
 			cfg.Stores = make(map[string]config.CloudStoreConfig)
 		}
-		cfg.Stores[hostname] = sc
+		cfg.Stores[storeName] = sc
 		cfg.Version = 2
 		if cfg.DefaultStore == "" {
-			cfg.DefaultStore = hostname
+			cfg.DefaultStore = storeName
 		}
 		if err := config.Save(dataDir, cfg); err != nil {
 			return fmt.Errorf("saving config: %w", err)
 		}
 
-		reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+		reg.Add(storeName, store.NewCloudStoreWithBase(sc.URL(), sc.APIKey))
 		if reg.DefaultName() == "" {
-			reg.SetDefault(hostname)
+			reg.SetDefault(storeName)
 		}
-		fmt.Printf("Added cloud store %s\n", hostname)
 
-		return fetchProjectsInteractive(hostname)
+		if storeName == hostname {
+			fmt.Printf("Added cloud store '%s'\n", storeName)
+		} else {
+			fmt.Printf("Added cloud store '%s' (%s)\n", storeName, hostname)
+		}
+
+		return fetchProjectsInteractive(storeName)
 	},
 }
 
@@ -113,7 +161,11 @@ var storeListCmd = &cobra.Command{
 			if name == cfg.DefaultStore {
 				def = "*"
 			}
-			rows[i] = []string{name, def}
+			hostname := ""
+			if sc, ok := cfg.Stores[name]; ok {
+				hostname = sc.Hostname
+			}
+			rows[i] = []string{name, hostname, def}
 		}
 		fmt.Println(markdown.RenderStoreTable(rows))
 		return nil
@@ -260,7 +312,7 @@ func fetchProjectsInteractive(storeName string) error {
 		if existing, ok := cfg.Projects[key]; ok && existing != storeName {
 			// Collision; prompt
 			var remap bool
-			msg := fmt.Sprintf("%s is mapped to %s. Remap to %s?", key, existing, storeName)
+			msg := fmt.Sprintf("%s is mapped to store '%s'. Remap to '%s'?", key, existing, storeName)
 			if err := huh.NewConfirm().Title(msg).Value(&remap).Run(); err != nil || !remap {
 				continue
 			}
@@ -313,6 +365,7 @@ func joinKeys(keys []string) string {
 }
 
 func init() {
+	storeAddCmd.Flags().String("name", "", "store name (defaults to hostname)")
 	storeAddCmd.Flags().String("api-key", "", "API key (skip device flow)")
 	storeAddCmd.Flags().String("path", "", "API path override (default: /api/v1)")
 	storeAddCmd.Flags().String("protocol", "", "protocol override (default: https)")

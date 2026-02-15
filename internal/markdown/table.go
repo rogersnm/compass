@@ -84,7 +84,7 @@ func RenderStoreTable(rows [][]string) string {
 	if len(rows) == 0 {
 		return "No stores configured."
 	}
-	return renderTable([]string{"Store", "Default"}, rows)
+	return renderTable([]string{"Store", "Hostname", "Default"}, rows)
 }
 
 func renderTable(headers []string, rows [][]string) string {

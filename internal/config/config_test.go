@@ -97,19 +97,18 @@ func TestMigrateV1_Empty(t *testing.T) {
 
 func TestCloudStoreConfig_URL(t *testing.T) {
 	tests := []struct {
-		name     string
-		cfg      CloudStoreConfig
-		hostname string
-		want     string
+		name string
+		cfg  CloudStoreConfig
+		want string
 	}{
-		{"defaults", CloudStoreConfig{APIKey: "k"}, "compasscloud.io", "https://compasscloud.io/api/v1"},
-		{"custom path", CloudStoreConfig{APIKey: "k", Path: "/compass/api/v1"}, "example.com", "https://example.com/compass/api/v1"},
-		{"custom protocol", CloudStoreConfig{APIKey: "k", Protocol: "http"}, "localhost:8080", "http://localhost:8080/api/v1"},
-		{"all custom", CloudStoreConfig{APIKey: "k", Path: "/v2", Protocol: "http"}, "self.host", "http://self.host/v2"},
+		{"defaults", CloudStoreConfig{Hostname: "compasscloud.io", APIKey: "k"}, "https://compasscloud.io/api/v1"},
+		{"custom path", CloudStoreConfig{Hostname: "example.com", APIKey: "k", Path: "/compass/api/v1"}, "https://example.com/compass/api/v1"},
+		{"custom protocol", CloudStoreConfig{Hostname: "localhost:8080", APIKey: "k", Protocol: "http"}, "http://localhost:8080/api/v1"},
+		{"all custom", CloudStoreConfig{Hostname: "self.host", APIKey: "k", Path: "/v2", Protocol: "http"}, "http://self.host/v2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.cfg.URL(tt.hostname))
+			assert.Equal(t, tt.want, tt.cfg.URL())
 		})
 	}
 }
@@ -137,8 +136,9 @@ func TestSave_V2WithStores(t *testing.T) {
 		DefaultStore: "compasscloud.io",
 		LocalEnabled: true,
 		Stores: map[string]CloudStoreConfig{
-			"compasscloud.io": {APIKey: "cpk_xxx"},
+			"compasscloud.io": {Hostname: "compasscloud.io", APIKey: "cpk_xxx"},
 			"self.example.com": {
+				Hostname: "self.example.com",
 				APIKey:   "cpk_yyy",
 				Path:     "/compass/api/v1",
 				Protocol: "http",
@@ -162,4 +162,89 @@ func TestSave_V2WithStores(t *testing.T) {
 	assert.Equal(t, "http", loaded.Stores["self.example.com"].Protocol)
 	assert.Equal(t, "local", loaded.Projects["AUTH"])
 	assert.Equal(t, "compasscloud.io", loaded.Projects["API"])
+}
+
+func TestLoad_BackfillHostname(t *testing.T) {
+	dir := t.TempDir()
+	// Old config without hostname field
+	yaml := "version: 2\nstores:\n  compasscloud.io:\n    api_key: cpk_xxx\n"
+	os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(yaml), 0644)
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "compasscloud.io", cfg.Stores["compasscloud.io"].Hostname)
+}
+
+func TestLoad_BackfillHostname_Mixed(t *testing.T) {
+	dir := t.TempDir()
+	// Mix of old (no hostname) and new (has hostname) entries
+	yaml := `version: 2
+stores:
+  compasscloud.io:
+    api_key: cpk_old
+  work:
+    hostname: compasscloud.io
+    api_key: cpk_work
+`
+	os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(yaml), 0644)
+
+	cfg, err := Load(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "compasscloud.io", cfg.Stores["compasscloud.io"].Hostname)
+	assert.Equal(t, "compasscloud.io", cfg.Stores["work"].Hostname)
+}
+
+func TestSave_RoundTripNamedStores(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{
+		Version:      2,
+		DefaultStore: "personal",
+		Stores: map[string]CloudStoreConfig{
+			"personal": {Hostname: "compasscloud.io", APIKey: "cpk_personal"},
+			"work":     {Hostname: "compasscloud.io", APIKey: "cpk_work"},
+		},
+		Projects: map[string]string{
+			"AUTH": "personal",
+			"API":  "work",
+		},
+	}
+
+	require.NoError(t, Save(dir, cfg))
+
+	loaded, err := Load(dir)
+	require.NoError(t, err)
+	assert.Len(t, loaded.Stores, 2)
+	assert.Equal(t, "compasscloud.io", loaded.Stores["personal"].Hostname)
+	assert.Equal(t, "cpk_personal", loaded.Stores["personal"].APIKey)
+	assert.Equal(t, "compasscloud.io", loaded.Stores["work"].Hostname)
+	assert.Equal(t, "cpk_work", loaded.Stores["work"].APIKey)
+	assert.Equal(t, "personal", loaded.Projects["AUTH"])
+	assert.Equal(t, "work", loaded.Projects["API"])
+}
+
+func TestValidateStoreName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid hostname", "compasscloud.io", false},
+		{"valid custom name", "work", false},
+		{"valid with numbers", "org42", false},
+		{"empty", "", true},
+		{"whitespace only", "   ", true},
+		{"leading space", " work", true},
+		{"trailing space", "work ", true},
+		{"reserved local", "local", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStoreName(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

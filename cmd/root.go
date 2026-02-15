@@ -65,8 +65,8 @@ var rootCmd = &cobra.Command{
 		if cfg.LocalEnabled {
 			reg.Add("local", store.NewLocal(dataDir))
 		}
-		for hostname, sc := range cfg.Stores {
-			reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+		for storeName, sc := range cfg.Stores {
+			reg.Add(storeName, store.NewCloudStoreWithBase(sc.URL(), sc.APIKey))
 		}
 
 		// Store commands work without configured stores
@@ -296,6 +296,10 @@ func runSetupPrompt(cmd *cobra.Command) error {
 	switch choice {
 	case "login":
 		fmt.Println()
+		if cfg.Stores == nil {
+			cfg.Stores = make(map[string]config.CloudStoreConfig)
+		}
+		cfg.Stores["compasscloud.io"] = config.CloudStoreConfig{Hostname: "compasscloud.io"}
 		return runDeviceFlowLogin("compasscloud.io")
 	case "signup":
 		openBrowser(signupURL)
@@ -318,12 +322,13 @@ func runSetupPrompt(cmd *cobra.Command) error {
 }
 
 // runDeviceFlowLogin performs the device flow login and saves the API key.
-func runDeviceFlowLogin(hostname string) error {
-	sc, ok := cfg.Stores[hostname]
+// storeName is the key in cfg.Stores; hostname is read from the config entry.
+func runDeviceFlowLogin(storeName string) error {
+	sc, ok := cfg.Stores[storeName]
 	if !ok {
-		sc = config.CloudStoreConfig{}
+		return fmt.Errorf("store %q not found in config", storeName)
 	}
-	server := sc.URL(hostname)
+	server := sc.URL()
 
 	resp, err := http.Post(server+"/auth/device", "application/json", nil)
 	if err != nil {
@@ -390,18 +395,18 @@ func runDeviceFlowLogin(hostname string) error {
 			if cfg.Stores == nil {
 				cfg.Stores = make(map[string]config.CloudStoreConfig)
 			}
-			cfg.Stores[hostname] = sc
+			cfg.Stores[storeName] = sc
 			if cfg.DefaultStore == "" {
-				cfg.DefaultStore = hostname
+				cfg.DefaultStore = storeName
 			}
 			cfg.Version = 2
 			if err := config.Save(dataDir, cfg); err != nil {
 				return fmt.Errorf("saving config: %w", err)
 			}
 
-			reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+			reg.Add(storeName, store.NewCloudStoreWithBase(sc.URL(), sc.APIKey))
 			if reg.DefaultName() == "" {
-				reg.SetDefault(hostname)
+				reg.SetDefault(storeName)
 			}
 
 			orgInfo := ""
@@ -462,8 +467,12 @@ var configStatusCmd = &cobra.Command{
 			fmt.Println("Local store: enabled")
 			fmt.Println("Data: " + dataDir)
 		}
-		for hostname, sc := range cfg.Stores {
-			fmt.Printf("Cloud store: %s\n", hostname)
+		for name, sc := range cfg.Stores {
+			if name == sc.Hostname {
+				fmt.Printf("Cloud store: %s\n", name)
+			} else {
+				fmt.Printf("Cloud store: %s (%s)\n", name, sc.Hostname)
+			}
 			fmt.Printf("  API key: %s...\n", sc.APIKey[:min(8, len(sc.APIKey))])
 		}
 		if cfg.DefaultStore != "" {

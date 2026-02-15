@@ -406,6 +406,7 @@ func setupCloudEnv(t *testing.T) *fakeAPI {
 		DefaultStore: hostname,
 		Stores: map[string]config.CloudStoreConfig{
 			hostname: {
+				Hostname: hostname,
 				APIKey:   "test-key",
 				Protocol: u.Scheme, // "http"
 				// Path defaults to "/api/v1"
@@ -417,7 +418,7 @@ func setupCloudEnv(t *testing.T) *fakeAPI {
 
 	sc := cfg.Stores[hostname]
 	reg = store.NewRegistry(cfg, dir)
-	reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(hostname), sc.APIKey))
+	reg.Add(hostname, store.NewCloudStoreWithBase(sc.URL(), sc.APIKey))
 
 	return api
 }

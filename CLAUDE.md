@@ -35,13 +35,18 @@ default_store: local
 local_enabled: true
 stores:
   compasscloud.io:
-    api_key: cpk_xxx
+    hostname: compasscloud.io
+    api_key: cpk_personal
+  work:
+    hostname: compasscloud.io
+    api_key: cpk_work_org
 projects:
   AUTH: local
   API: compasscloud.io
+  WORK: work
 ```
 
-V1 configs (no `version` field) are auto-migrated on first load.
+Store names (map keys) are user-chosen; `hostname` is always explicit. Old configs without `hostname` get it backfilled from the map key on load. Multiple stores can point to the same hostname (e.g. different orgs/accounts). V1 configs (no `version` field) are auto-migrated on first load.
 
 ### Storage layout (local store)
 
@@ -81,7 +86,7 @@ Epics have no status. They must not have a `status` field in frontmatter, displa
 - `internal/model/` - Structs with `Validate()` methods. No I/O.
 - `internal/dag/` - Graph construction from `[]*model.Task`, cycle detection, topological sort, ASCII rendering.
 - `internal/markdown/` - Frontmatter parse/marshal, glamour rendering, lipgloss tables.
-- `internal/config/` - V2 multi-store config with migration from v1. `CloudStoreConfig` type with `URL(hostname)` method.
+- `internal/config/` - V2 multi-store config with migration from v1. `CloudStoreConfig` type with `Hostname` field and `URL()` method.
 
 ### MTP integration
 

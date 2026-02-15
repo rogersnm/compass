@@ -11,8 +11,8 @@ import (
 
 // Registry routes commands to the correct Store based on project key.
 type Registry struct {
-	stores       map[string]Store // "local" and/or hostnames -> Store
-	defaultStore string           // "local" or a hostname
+	stores       map[string]Store // "local" and/or store names -> Store
+	defaultStore string           // "local" or a store name
 	cfg          *config.Config
 	dataDir      string
 }
@@ -93,16 +93,16 @@ func (r *Registry) All() map[string]Store {
 	return r.stores
 }
 
-// CloudHosts returns sorted hostnames of cloud stores.
-func (r *Registry) CloudHosts() []string {
-	var hosts []string
+// CloudStoreNames returns sorted names of cloud stores.
+func (r *Registry) CloudStoreNames() []string {
+	var names []string
 	for name := range r.stores {
 		if name != "local" {
-			hosts = append(hosts, name)
+			names = append(names, name)
 		}
 	}
-	sort.Strings(hosts)
-	return hosts
+	sort.Strings(names)
+	return names
 }
 
 // CacheProject writes the project-to-store mapping and persists config.
@@ -133,8 +133,8 @@ func (r *Registry) probeOrder() []string {
 	if _, ok := r.stores["local"]; ok {
 		names = append(names, "local")
 	}
-	for _, h := range r.CloudHosts() {
-		names = append(names, h)
+	for _, n := range r.CloudStoreNames() {
+		names = append(names, n)
 	}
 	return names
 }
